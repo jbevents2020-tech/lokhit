@@ -26,8 +26,11 @@ create table if not exists public.categories (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
   slug text not null unique,
+  parent_id uuid references public.categories(id) on delete set null,
   created_at timestamptz not null default now()
 );
+
+alter table public.categories add column if not exists parent_id uuid references public.categories(id) on delete set null;
 
 create table if not exists public.news (
   id uuid primary key default gen_random_uuid(),
@@ -64,15 +67,43 @@ create index if not exists news_author_idx on public.news(author_id);
 create index if not exists news_category_idx on public.news(category_id);
 create index if not exists news_created_idx on public.news(created_at desc);
 
-insert into public.categories (name, slug) values
-  ('राजकारण', 'politics'),
-  ('स्थानिक', 'local'),
-  ('शिक्षण', 'education'),
-  ('क्रीडा', 'sports'),
-  ('मनोरंजन', 'entertainment'),
-  ('महाराष्ट्र', 'maharashtra'),
-  ('देश', 'india')
-on conflict (slug) do nothing;
+-- Keep existing ids used by news records while updating renamed categories.
+update public.categories set name = 'राजकीय', parent_id = null where slug = 'politics';
+update public.categories set name = 'सिनेजगत', parent_id = null where slug = 'entertainment';
+update public.categories set name = 'राष्ट्रीय', parent_id = null where slug = 'india';
+
+insert into public.categories (name, slug, parent_id) values
+  ('Breaking News', 'breaking-news', null),
+  ('अर्थकारण', 'economy', null),
+  ('आंतरराष्ट्रीय', 'international', null),
+  ('कृषी', 'agriculture', null),
+  ('क्रीडा', 'sports', null),
+  ('गुन्हेगारी', 'crime', null),
+  ('तंत्रज्ञान', 'technology', null),
+  ('पश्चिम विदर्भ', 'west-vidarbha', null),
+  ('पूर्व विदर्भ', 'east-vidarbha', null),
+  ('बिज़नेस / व्यापार', 'business', null),
+  ('महाराष्ट्र', 'maharashtra', null),
+  ('राजकीय', 'politics', null),
+  ('राष्ट्रीय', 'india', null),
+  ('रोजगार', 'employment', null),
+  ('संपादकीय', 'editorial', null),
+  ('सिनेजगत', 'entertainment', null)
+on conflict (slug) do update set name = excluded.name, parent_id = excluded.parent_id;
+
+insert into public.categories (name, slug, parent_id)
+select child.name, child.slug, parent.id
+from public.categories parent
+cross join (values
+  ('गडचिरोली', 'gadchiroli'),
+  ('गोंदिया', 'gondia'),
+  ('चंद्रपूर', 'chandrapur'),
+  ('नागपूर', 'nagpur'),
+  ('भंडारा', 'bhandara'),
+  ('वर्धा', 'wardha')
+) as child(name, slug)
+where parent.slug = 'east-vidarbha'
+on conflict (slug) do update set name = excluded.name, parent_id = excluded.parent_id;
 
 alter table public.profiles enable row level security;
 alter table public.categories enable row level security;
