@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle2, ImagePlus, LoaderCircle, Send, Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -32,6 +32,8 @@ export default function NewsCreatorPage() {
   const [rejectionReason, setRejectionReason] = useState<string | null>(null);
   const [rawInfo, setRawInfo] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
+  const [featuredImage, setFeaturedImage] = useState<File | null>(null);
+  const [featuredImagePreview, setFeaturedImagePreview] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadCreator() {
@@ -43,7 +45,7 @@ export default function NewsCreatorPage() {
       const [profileResult, categoriesResult, newsResult] = await Promise.all([
         supabase.from("profiles").select("full_name, role").eq("id", user.id).single(),
         supabase.from("categories").select("id, name").order("name"),
-        editId ? supabase.from("news").select("id, title, slug, excerpt, content, location, category_id, status, rejection_reason").eq("id", editId).eq("author_id", user.id).in("status", ["draft", "rejected"]).single() : Promise.resolve({ data: null, error: null }),
+        editId ? supabase.from("news").select("id, title, slug, excerpt, content, location, category_id, status, rejection_reason, featured_image_url").eq("id", editId).eq("author_id", user.id).in("status", ["draft", "rejected"]).single() : Promise.resolve({ data: null, error: null }),
       ]);
 
       if (profileResult.error) setMessage({ type: "error", text: `Profile load झाला नाही: ${profileResult.error.message}` });
@@ -55,6 +57,7 @@ export default function NewsCreatorPage() {
         setSavedNewsId(newsResult.data.id); setTitle(newsResult.data.title); setSlug(newsResult.data.slug ?? "");
         setExcerpt(newsResult.data.excerpt ?? ""); setContent(newsResult.data.content); setLocation(newsResult.data.location ?? "");
         setCategoryId(newsResult.data.category_id ?? ""); setRejectionReason(newsResult.data.rejection_reason);
+        setFeaturedImagePreview(newsResult.data.featured_image_url ?? null);
       }
       setPageLoading(false);
     }
@@ -64,6 +67,56 @@ export default function NewsCreatorPage() {
   function handleTitleChange(value: string) {
     setTitle(value);
     if (!slug || slug === makeSlug(title)) setSlug(makeSlug(value));
+  }
+
+  function handleFeaturedImage(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setMessage({ type: "error", text: "फक्त JPG, PNG किंवा WebP image निवडा." });
+      event.target.value = "";
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setMessage({ type: "error", text: "Featured Image 5 MB पेक्षा लहान असणे आवश्यक आहे." });
+      event.target.value = "";
+      return;
+    }
+    setMessage(null);
+    setFeaturedImage(file);
+    setFeaturedImagePreview((current) => {
+      if (current?.startsWith("blob:")) URL.revokeObjectURL(current);
+      return URL.createObjectURL(file);
+    });
+  }
+
+  async function uploadFeaturedImage(newsId: string) {
+    if (!featuredImage || !userId) return null;
+    const extension = featuredImage.name.split(".").pop()?.toLowerCase() || "jpg";
+    const storagePath = `${userId}/${newsId}/${crypto.randomUUID()}.${extension}`;
+    const { error: uploadError } = await supabase.storage.from("news-images").upload(storagePath, featuredImage, {
+      cacheControl: "3600", contentType: featuredImage.type, upsert: false,
+    });
+    if (uploadError) throw new Error(uploadError.message);
+
+    const { data: publicUrlData } = supabase.storage.from("news-images").getPublicUrl(storagePath);
+    const publicUrl = publicUrlData.publicUrl;
+    const { error: oldImageError } = await supabase.from("news_images").update({ is_featured: false }).eq("news_id", newsId).eq("is_featured", true);
+    if (oldImageError) {
+      await supabase.storage.from("news-images").remove([storagePath]);
+      throw new Error(oldImageError.message);
+    }
+    const { error: imageRowError } = await supabase.from("news_images").insert({
+      news_id: newsId, storage_path: storagePath, public_url: publicUrl,
+      alt_text: title.trim() || null, is_featured: true,
+    });
+    if (imageRowError) {
+      await supabase.storage.from("news-images").remove([storagePath]);
+      throw new Error(imageRowError.message);
+    }
+    const { error: newsImageError } = await supabase.from("news").update({ featured_image_url: publicUrl }).eq("id", newsId);
+    if (newsImageError) throw new Error(newsImageError.message);
+    return publicUrl;
   }
 
   async function saveNews(event: FormEvent, status: SaveStatus) {
@@ -77,7 +130,7 @@ export default function NewsCreatorPage() {
     const newsRecord = {
       title: title.trim(), slug: slug.trim() || null, excerpt: excerpt.trim() || null,
       content: content.trim(), location: location.trim() || null, category_id: categoryId || null,
-      author_id: userId, status, updated_at: new Date().toISOString(),
+      author_id: userId, status: featuredImage ? "draft" : status, updated_at: new Date().toISOString(),
     };
     const result = savedNewsId
       ? await supabase.from("news").update(newsRecord).eq("id", savedNewsId).select("id").single()
@@ -86,9 +139,23 @@ export default function NewsCreatorPage() {
     if (result.error) {
       setMessage({ type: "error", text: result.error.code === "23505" ? "हा slug आधीच वापरला आहे. कृपया वेगळा slug द्या." : `बातमी जतन झाली नाही: ${result.error.message}` });
     } else {
-      setSavedNewsId(result.data.id);
-      setSubmitted(status === "submitted");
-      setMessage({ type: "success", text: status === "draft" ? "बातमी Draft म्हणून जतन झाली." : "बातमी Editor कडे यशस्वीरित्या submit झाली." });
+      const newsId = result.data.id;
+      setSavedNewsId(newsId);
+      try {
+        const publicUrl = await uploadFeaturedImage(newsId);
+        if (publicUrl) {
+          setFeaturedImage(null);
+          setFeaturedImagePreview(publicUrl);
+        }
+        if (featuredImage && status === "submitted") {
+          const { error: submitError } = await supabase.from("news").update({ status: "submitted", updated_at: new Date().toISOString() }).eq("id", newsId);
+          if (submitError) throw new Error(submitError.message);
+        }
+        setSubmitted(status === "submitted");
+        setMessage({ type: "success", text: status === "draft" ? "बातमी Draft म्हणून जतन झाली." : "बातमी Editor कडे यशस्वीरित्या submit झाली." });
+      } catch (error) {
+        setMessage({ type: "error", text: `बातमी Draft म्हणून जतन झाली, पण Featured Image upload झाला नाही: ${error instanceof Error ? error.message : "Unknown error"}` });
+      }
     }
     setSavingAs(null);
   }
@@ -140,7 +207,7 @@ export default function NewsCreatorPage() {
             </div>
           </div>
           <aside className="space-y-6">
-            <div className="rounded-2xl border bg-white p-5 shadow-sm"><div className="flex items-center gap-3"><div className="rounded-xl bg-amber-50 p-3 text-amber-700"><ImagePlus size={20}/></div><div><h2 className="font-bold">Featured Image</h2><p className="text-xs text-slate-500">मुख्य फोटो upload करा</p></div></div><div className="mt-5 rounded-xl border-2 border-dashed border-slate-200 p-8 text-center text-sm text-slate-500">Image upload येथे येईल</div></div>
+            <div className="rounded-2xl border bg-white p-5 shadow-sm"><div className="flex items-center gap-3"><div className="rounded-xl bg-amber-50 p-3 text-amber-700"><ImagePlus size={20}/></div><div><h2 className="font-bold">Featured Image</h2><p className="text-xs text-slate-500">मुख्य फोटो upload करा</p></div></div><label htmlFor="featured-image" className={`relative mt-5 flex min-h-44 cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 text-center text-sm text-slate-500 transition hover:border-amber-400 hover:bg-amber-50 ${disabled ? "pointer-events-none opacity-60" : ""}`} style={featuredImagePreview ? { backgroundImage: `linear-gradient(rgb(15 23 42 / 0.28), rgb(15 23 42 / 0.28)), url(${featuredImagePreview})`, backgroundPosition: "center", backgroundSize: "cover" } : undefined}><input id="featured-image" type="file" accept="image/jpeg,image/png,image/webp" onChange={handleFeaturedImage} disabled={disabled} className="sr-only"/><span className={`rounded-lg px-4 py-2 font-semibold ${featuredImagePreview ? "bg-white/90 text-slate-900 shadow" : ""}`}>{featuredImagePreview ? "फोटो बदलण्यासाठी क्लिक करा" : "फोटो निवडण्यासाठी क्लिक करा"}</span></label><p className="mt-2 text-center text-xs text-slate-400">JPG, PNG किंवा WebP · कमाल 5 MB</p></div>
             <div className="rounded-2xl bg-slate-900 p-5 text-white"><h2 className="font-bold">AI Assistant</h2><p className="mt-2 text-sm leading-6 text-slate-300">Raw information वरून headline, article, excerpt आणि SEO slug तयार करा.</p><textarea id="ai-notes" value={rawInfo} onChange={(event) => setRawInfo(event.target.value)} disabled={aiLoading || submitted} rows={7} placeholder="घटनेची तथ्ये, नावे, ठिकाण, वेळ आणि quotes येथे द्या..." className="mt-4 w-full resize-y rounded-xl border border-white/20 bg-white/10 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-400 focus:border-amber-400 disabled:opacity-60"/><button type="button" onClick={generateWithAi} disabled={aiLoading || submitted} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-bold text-slate-900 disabled:opacity-60">{aiLoading ? <><LoaderCircle className="animate-spin" size={17}/> AI बातमी तयार करत आहे...</> : "AI ने बातमी तयार करा"}</button></div>
           </aside>
         </form>}
