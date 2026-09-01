@@ -44,6 +44,7 @@ export async function POST(request: Request) {
     .eq("id", newsId).eq("status", "approved").single();
   if (newsError || !news) return NextResponse.json({ error: "Approved बातमी उपलब्ध नाही." }, { status: 404 });
   if (news.wordpress_post_id) return NextResponse.json({ error: "ही बातमी आधीच WordPress वर publish झाली आहे." }, { status: 409 });
+  if (!news.featured_image_url) return NextResponse.json({ error: "Featured Image नसल्यामुळे WordPressवर publish करता येणार नाही." }, { status: 400 });
 
   const authorization = `Basic ${Buffer.from(`${wordpressUsername}:${wordpressPassword}`).toString("base64")}`;
   try {
