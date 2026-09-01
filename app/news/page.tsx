@@ -100,11 +100,11 @@ export default function NewsCreatorPage() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) { window.location.href = "/login"; return; }
     try {
-      const response = await fetch("/api/openai", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ rawInfo }) });
+      const response = await fetch("/api/gemini", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ rawInfo }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "AI request अयशस्वी झाली.");
       setTitle(result.article.title); setExcerpt(result.article.excerpt); setContent(result.article.content); setSlug(makeSlug(result.article.slug || result.article.title));
-      setMessage({ type: "success", text: "OpenAI ने बातमी तयार केली. कृपया तपासून Draft जतन करा किंवा submit करा." });
+      setMessage({ type: "success", text: "Gemini ने बातमी तयार केली. कृपया तपासून Draft जतन करा किंवा submit करा." });
     } catch (error) { setMessage({ type: "error", text: error instanceof Error ? error.message : "AI request अयशस्वी झाली." }); }
     setAiLoading(false);
   }
@@ -118,7 +118,7 @@ export default function NewsCreatorPage() {
       </div></header>
       <section className="mx-auto max-w-6xl px-6 py-8">
         <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500"><ArrowLeft size={16}/> मागे</Link>
-        <div className="mt-5 flex flex-col justify-between gap-4 md:flex-row md:items-end"><div><p className="text-sm font-semibold text-amber-600">REPORTER WORKSPACE</p><h1 className="mt-1 text-3xl font-black">{savedNewsId ? "बातमी edit करा" : "नवीन बातमी तयार करा"}</h1><p className="mt-1 text-sm text-slate-500">बातमी लिहा, AI मदत घ्या आणि editor कडे submit करा.</p></div><button type="button" onClick={() => document.getElementById("ai-notes")?.focus()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white"><Sparkles size={17}/> OpenAI</button></div>
+        <div className="mt-5 flex flex-col justify-between gap-4 md:flex-row md:items-end"><div><p className="text-sm font-semibold text-amber-600">REPORTER WORKSPACE</p><h1 className="mt-1 text-3xl font-black">{savedNewsId ? "बातमी edit करा" : "नवीन बातमी तयार करा"}</h1><p className="mt-1 text-sm text-slate-500">बातमी लिहा, AI मदत घ्या आणि editor कडे submit करा.</p></div><button type="button" onClick={() => document.getElementById("ai-notes")?.focus()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white"><Sparkles size={17}/> Gemini AI</button></div>
         {pageLoading ? <div className="mt-8 flex min-h-64 items-center justify-center rounded-2xl border bg-white text-sm font-semibold text-slate-500"><LoaderCircle className="mr-2 animate-spin" size={18}/> News Creator load होत आहे...</div> :
         <form onSubmit={(event) => saveNews(event, "submitted")} className="mt-8 grid gap-6 lg:grid-cols-[1fr_330px]">
           <div className="rounded-2xl border bg-white p-6 shadow-sm">
