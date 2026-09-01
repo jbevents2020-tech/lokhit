@@ -125,6 +125,7 @@ export default function NewsCreatorPage() {
     if (!userId) { setMessage({ type: "error", text: "Session उपलब्ध नाही. कृपया पुन्हा login करा." }); return; }
     if (!title.trim()) { setMessage({ type: "error", text: "बातमीचे शीर्षक आवश्यक आहे." }); return; }
     if (status === "submitted" && !content.trim()) { setMessage({ type: "error", text: "Editor कडे submit करण्यापूर्वी बातमीचा मजकूर लिहा." }); return; }
+    if (status === "submitted" && !featuredImage && !featuredImagePreview) { setMessage({ type: "error", text: "Editor कडे submit करण्यापूर्वी Featured Image upload करा." }); return; }
 
     setSavingAs(status);
     const newsRecord = {
