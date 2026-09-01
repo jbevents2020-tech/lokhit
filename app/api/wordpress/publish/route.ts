@@ -6,11 +6,14 @@ function textToHtml(value: string) {
   return escaped.split(/\n{2,}/).map((paragraph) => `<p>${paragraph.replaceAll("\n", "<br>")}</p>`).join("\n");
 }
 
-async function wordpressRequest(url: string, authorization: string, init: RequestInit) {
+async function wordpressRequest(url: string, authorization: string, init: RequestInit, label: string) {
   const response = await fetch(url, { ...init, headers: { Authorization: authorization, ...init.headers }, signal: AbortSignal.timeout(45000) });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(payload?.message || `WordPress request failed (${response.status}).`);
-  return payload;
+  const responseText = await response.text();
+  let payload: Record<string, unknown> | null = null;
+  try { payload = responseText ? JSON.parse(responseText) as Record<string, unknown> : null; } catch { payload = null; }
+  const message = typeof payload?.message === "string" ? payload.message : null;
+  if (!response.ok) throw new Error(message || `${label} request failed (${response.status}).`);
+  return { payload, location: response.headers.get("location") };
 }
 
 export async function POST(request: Request) {
@@ -59,8 +62,11 @@ export async function POST(request: Request) {
         method: "POST",
         headers: { "Content-Type": imageResponse.headers.get("content-type") || "image/jpeg", "Content-Disposition": `attachment; filename="${filename.replaceAll('"', "")}"` },
         body: imageBytes,
-      });
-      featuredMedia = media.id;
+      }, "WordPress Media upload");
+      const mediaLocationId = media.location?.match(/\/media\/(\d+)\/?$/)?.[1];
+      const mediaId = typeof media.payload?.id === "number" ? media.payload.id : Number(mediaLocationId);
+      if (!Number.isInteger(mediaId) || mediaId <= 0) throw new Error("WordPress Media upload responseमध्ये media id मिळाला नाही. Site REST API किंवा security plugin तपासा.");
+      featuredMedia = mediaId;
     }
 
     const post = await wordpressRequest(`${wordpressUrl}/wp-json/wp/v2/posts`, authorization, {
@@ -71,13 +77,17 @@ export async function POST(request: Request) {
         excerpt: news.excerpt ? textToHtml(news.excerpt) : undefined,
         content: textToHtml(news.content), status: "publish", featured_media: featuredMedia,
       }),
-    });
+    }, "WordPress Post publish");
+    const postLocationId = post.location?.match(/\/posts\/(\d+)\/?$/)?.[1];
+    const postId = typeof post.payload?.id === "number" ? post.payload.id : Number(postLocationId);
+    const postLink = typeof post.payload?.link === "string" ? post.payload.link : post.location;
+    if (!Number.isInteger(postId) || postId <= 0 || !postLink) throw new Error("WordPress publish response अपूर्ण आहे. Post id किंवा URL मिळाला नाही.");
     const { error: updateError } = await supabase.from("news").update({
-      status: "published", wordpress_post_id: post.id, wordpress_url: post.link,
+      status: "published", wordpress_post_id: postId, wordpress_url: postLink,
       published_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     }).eq("id", news.id).eq("status", "approved");
-    if (updateError) return NextResponse.json({ error: "WordPress वर publish झाली, पण Newsroom status update झाला नाही.", wordpressUrl: post.link }, { status: 502 });
-    return NextResponse.json({ wordpressUrl: post.link });
+    if (updateError) return NextResponse.json({ error: "WordPress वर publish झाली, पण Newsroom status update झाला नाही.", wordpressUrl: postLink }, { status: 502 });
+    return NextResponse.json({ wordpressUrl: postLink });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "WordPress publishing अयशस्वी झाले." }, { status: 502 });
   }
