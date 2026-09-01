@@ -1,33 +1,121 @@
+"use client";
+
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ImagePlus, Sparkles, Send } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ImagePlus, LoaderCircle, Send, Sparkles } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+
+type Profile = { full_name: string | null; role: "admin" | "editor" | "reporter" };
+type Category = { id: string; name: string };
+type SaveStatus = "draft" | "submitted";
+
+function makeSlug(value: string) {
+  return value.trim().toLowerCase().normalize("NFKD").replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "");
+}
 
 export default function NewsCreatorPage() {
+  const supabase = useMemo(() => createClient(), []);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [pageLoading, setPageLoading] = useState(true);
+  const [savingAs, setSavingAs] = useState<SaveStatus | null>(null);
+  const [savedNewsId, setSavedNewsId] = useState<string | null>(null);
+  const [title, setTitle] = useState("");
+  const [slug, setSlug] = useState("");
+  const [excerpt, setExcerpt] = useState("");
+  const [content, setContent] = useState("");
+  const [location, setLocation] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [submitted, setSubmitted] = useState(false);
+
+  useEffect(() => {
+    async function loadCreator() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { window.location.href = "/login"; return; }
+
+      setUserId(user.id);
+      const [profileResult, categoriesResult] = await Promise.all([
+        supabase.from("profiles").select("full_name, role").eq("id", user.id).single(),
+        supabase.from("categories").select("id, name").order("name"),
+      ]);
+
+      if (profileResult.error) setMessage({ type: "error", text: `Profile load झाला नाही: ${profileResult.error.message}` });
+      else setProfile(profileResult.data as Profile);
+      if (categoriesResult.error) setMessage({ type: "error", text: `Categories load झाल्या नाहीत: ${categoriesResult.error.message}` });
+      else setCategories((categoriesResult.data ?? []) as Category[]);
+      setPageLoading(false);
+    }
+    loadCreator();
+  }, [supabase]);
+
+  function handleTitleChange(value: string) {
+    setTitle(value);
+    if (!slug || slug === makeSlug(title)) setSlug(makeSlug(value));
+  }
+
+  async function saveNews(event: FormEvent, status: SaveStatus) {
+    event.preventDefault();
+    setMessage(null);
+    if (!userId) { setMessage({ type: "error", text: "Session उपलब्ध नाही. कृपया पुन्हा login करा." }); return; }
+    if (!title.trim()) { setMessage({ type: "error", text: "बातमीचे शीर्षक आवश्यक आहे." }); return; }
+    if (status === "submitted" && !content.trim()) { setMessage({ type: "error", text: "Editor कडे submit करण्यापूर्वी बातमीचा मजकूर लिहा." }); return; }
+
+    setSavingAs(status);
+    const newsRecord = {
+      title: title.trim(), slug: slug.trim() || null, excerpt: excerpt.trim() || null,
+      content: content.trim(), location: location.trim() || null, category_id: categoryId || null,
+      author_id: userId, status, updated_at: new Date().toISOString(),
+    };
+    const result = savedNewsId
+      ? await supabase.from("news").update(newsRecord).eq("id", savedNewsId).select("id").single()
+      : await supabase.from("news").insert(newsRecord).select("id").single();
+
+    if (result.error) {
+      setMessage({ type: "error", text: result.error.code === "23505" ? "हा slug आधीच वापरला आहे. कृपया वेगळा slug द्या." : `बातमी जतन झाली नाही: ${result.error.message}` });
+    } else {
+      setSavedNewsId(result.data.id);
+      setSubmitted(status === "submitted");
+      setMessage({ type: "success", text: status === "draft" ? "बातमी Draft म्हणून जतन झाली." : "बातमी Editor कडे यशस्वीरित्या submit झाली." });
+    }
+    setSavingAs(null);
+  }
+
+  const disabled = savingAs !== null || submitted;
   return (
     <main className="min-h-screen bg-slate-50">
-      <header className="border-b bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <div><div className="text-xl font-black">लोकहित <span className="text-amber-600">Newsroom</span></div><div className="text-xs text-slate-500">News Creator</div></div>
-          <Link href="/" className="text-sm font-semibold text-slate-600 hover:text-slate-950">Dashboard</Link>
-        </div>
-      </header>
+      <header className="border-b bg-white"><div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+        <div><div className="text-xl font-black">लोकहित <span className="text-amber-600">Newsroom</span></div><div className="text-xs text-slate-500">News Creator</div></div>
+        <div className="flex items-center gap-3"><span className="hidden text-xs font-semibold text-slate-500 sm:inline">{profile?.full_name || "Newsroom User"} · {profile?.role || "user"}</span><Link href="/" className="text-sm font-semibold text-slate-600 hover:text-slate-950">Dashboard</Link></div>
+      </div></header>
       <section className="mx-auto max-w-6xl px-6 py-8">
         <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500"><ArrowLeft size={16}/> मागे</Link>
-        <div className="mt-5 flex flex-col justify-between gap-4 md:flex-row md:items-end"><div><p className="text-sm font-semibold text-amber-600">REPORTER WORKSPACE</p><h1 className="mt-1 text-3xl font-black">नवीन बातमी तयार करा</h1><p className="mt-1 text-sm text-slate-500">बातमी लिहा, AI मदत घ्या आणि editor कडे submit करा.</p></div><button className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white"><Sparkles size={17}/> Gemini AI</button></div>
-        <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_330px]">
+        <div className="mt-5 flex flex-col justify-between gap-4 md:flex-row md:items-end"><div><p className="text-sm font-semibold text-amber-600">REPORTER WORKSPACE</p><h1 className="mt-1 text-3xl font-black">नवीन बातमी तयार करा</h1><p className="mt-1 text-sm text-slate-500">बातमी लिहा, AI मदत घ्या आणि editor कडे submit करा.</p></div><button type="button" className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white"><Sparkles size={17}/> Gemini AI</button></div>
+        {pageLoading ? <div className="mt-8 flex min-h-64 items-center justify-center rounded-2xl border bg-white text-sm font-semibold text-slate-500"><LoaderCircle className="mr-2 animate-spin" size={18}/> News Creator load होत आहे...</div> :
+        <form onSubmit={(event) => saveNews(event, "submitted")} className="mt-8 grid gap-6 lg:grid-cols-[1fr_330px]">
           <div className="rounded-2xl border bg-white p-6 shadow-sm">
+            {message && <div role="status" className={`mb-5 rounded-xl border px-4 py-3 text-sm font-semibold ${message.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>{message.type === "success" && <CheckCircle2 className="mr-2 inline" size={17}/>} {message.text}</div>}
             <div className="grid gap-5 md:grid-cols-2">
-              <label className="md:col-span-2"><span className="mb-2 block text-sm font-semibold">बातमीचे शीर्षक</span><input placeholder="उदा. जिल्ह्यातील महत्त्वाची बातमी..." className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-500" /></label>
-              <label><span className="mb-2 block text-sm font-semibold">Category</span><select className="w-full rounded-xl border border-slate-200 px-4 py-3"><option>निवडा</option><option>राजकारण</option><option>स्थानिक</option><option>शिक्षण</option><option>क्रीडा</option><option>मनोरंजन</option></select></label>
-              <label><span className="mb-2 block text-sm font-semibold">Location</span><input placeholder="शहर / तालुका / जिल्हा" className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-500" /></label>
-              <label className="md:col-span-2"><span className="mb-2 block text-sm font-semibold">बातमीचा मजकूर</span><textarea rows={12} placeholder="बातमीची संपूर्ण माहिती येथे लिहा..." className="w-full resize-y rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-500" /></label>
+              <label className="md:col-span-2"><span className="mb-2 block text-sm font-semibold">बातमीचे शीर्षक</span><input value={title} onChange={(e) => handleTitleChange(e.target.value)} disabled={disabled} placeholder="उदा. जिल्ह्यातील महत्त्वाची बातमी..." className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-500 disabled:bg-slate-50" /></label>
+              <label><span className="mb-2 block text-sm font-semibold">Category</span><select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} disabled={disabled} className="w-full rounded-xl border border-slate-200 px-4 py-3 disabled:bg-slate-50"><option value="">निवडा</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+              <label><span className="mb-2 block text-sm font-semibold">Location</span><input value={location} onChange={(e) => setLocation(e.target.value)} disabled={disabled} placeholder="शहर / तालुका / जिल्हा" className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-500 disabled:bg-slate-50" /></label>
+              <label><span className="mb-2 block text-sm font-semibold">SEO Slug</span><input value={slug} onChange={(e) => setSlug(makeSlug(e.target.value))} disabled={disabled} placeholder="news-headline" className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-500 disabled:bg-slate-50" /></label>
+              <label><span className="mb-2 block text-sm font-semibold">Author</span><input value={profile?.full_name || "Newsroom User"} disabled className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-500" /></label>
+              <label className="md:col-span-2"><span className="mb-2 block text-sm font-semibold">Excerpt</span><textarea value={excerpt} onChange={(e) => setExcerpt(e.target.value)} disabled={disabled} rows={3} placeholder="बातमीचा संक्षिप्त सारांश..." className="w-full resize-y rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-500 disabled:bg-slate-50" /></label>
+              <label className="md:col-span-2"><span className="mb-2 block text-sm font-semibold">बातमीचा मजकूर</span><textarea value={content} onChange={(e) => setContent(e.target.value)} disabled={disabled} rows={12} placeholder="बातमीची संपूर्ण माहिती येथे लिहा..." className="w-full resize-y rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-500 disabled:bg-slate-50" /></label>
             </div>
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row"><button className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-bold">Draft जतन करा</button><button className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-600 px-5 py-3 text-sm font-bold text-white"><Send size={17}/> Editor कडे Submit करा</button></div>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <button type="button" onClick={(e) => saveNews(e, "draft")} disabled={disabled} className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-bold disabled:opacity-60">{savingAs === "draft" ? "जतन होत आहे..." : savedNewsId ? "Draft अपडेट करा" : "Draft जतन करा"}</button>
+              <button type="submit" disabled={disabled} className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-60">{savingAs === "submitted" ? <><LoaderCircle className="animate-spin" size={17}/> Submit होत आहे...</> : <><Send size={17}/> Editor कडे Submit करा</>}</button>
+              {submitted && <Link href="/" className="rounded-xl border border-slate-200 px-5 py-3 text-center text-sm font-bold">Dashboard वर जा</Link>}
+            </div>
           </div>
           <aside className="space-y-6">
             <div className="rounded-2xl border bg-white p-5 shadow-sm"><div className="flex items-center gap-3"><div className="rounded-xl bg-amber-50 p-3 text-amber-700"><ImagePlus size={20}/></div><div><h2 className="font-bold">Featured Image</h2><p className="text-xs text-slate-500">मुख्य फोटो upload करा</p></div></div><div className="mt-5 rounded-xl border-2 border-dashed border-slate-200 p-8 text-center text-sm text-slate-500">Image upload येथे येईल</div></div>
-            <div className="rounded-2xl bg-slate-900 p-5 text-white"><h2 className="font-bold">AI Assistant</h2><p className="mt-2 text-sm leading-6 text-slate-300">Raw information वरून headline, article, excerpt, SEO slug आणि tags तयार करण्यासाठी Gemini जोडले जाईल.</p><button className="mt-5 w-full rounded-xl bg-white px-4 py-3 text-sm font-bold text-slate-900">AI ने बातमी तयार करा</button></div>
+            <div className="rounded-2xl bg-slate-900 p-5 text-white"><h2 className="font-bold">AI Assistant</h2><p className="mt-2 text-sm leading-6 text-slate-300">Raw information वरून headline, article, excerpt आणि SEO slug तयार करण्यासाठी Gemini जोडले जाईल.</p><button type="button" className="mt-5 w-full rounded-xl bg-white px-4 py-3 text-sm font-bold text-slate-900">AI ने बातमी तयार करा</button></div>
           </aside>
-        </div>
+        </form>}
       </section>
     </main>
   );
