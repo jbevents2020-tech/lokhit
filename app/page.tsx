@@ -113,6 +113,7 @@ export default function Home() {
           <nav className="space-y-1 text-sm">
             <div className="flex items-center gap-3 rounded-xl bg-slate-900 px-4 py-3 font-semibold text-white"><LayoutDashboard size={17}/> Dashboard</div>
             <Link href="/news" className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-600 hover:bg-slate-50"><PenLine size={17}/> नवीन बातमी</Link>
+            <Link href="/my-news" className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-600 hover:bg-slate-50"><FileText size={17}/> माझ्या बातम्या</Link>
             {(profile?.role === "admin" || profile?.role === "editor") && <Link href="/review" className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-600 hover:bg-slate-50"><Send size={17}/> Editor Review</Link>}
             <div className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-600"><FileText size={17}/> सर्व बातम्या</div>
             <div className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-600"><Users size={17}/> Reporters</div>
