@@ -30,6 +30,8 @@ export default function NewsCreatorPage() {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [rejectionReason, setRejectionReason] = useState<string | null>(null);
+  const [rawInfo, setRawInfo] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
 
   useEffect(() => {
     async function loadCreator() {
@@ -91,6 +93,22 @@ export default function NewsCreatorPage() {
     setSavingAs(null);
   }
 
+  async function generateWithAi() {
+    setMessage(null);
+    if (rawInfo.trim().length < 20) { setMessage({ type: "error", text: "AI साठी किमान 20 अक्षरांची raw माहिती द्या." }); return; }
+    setAiLoading(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { window.location.href = "/login"; return; }
+    try {
+      const response = await fetch("/api/gemini", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ rawInfo }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "AI request अयशस्वी झाली.");
+      setTitle(result.article.title); setExcerpt(result.article.excerpt); setContent(result.article.content); setSlug(makeSlug(result.article.slug || result.article.title));
+      setMessage({ type: "success", text: "Gemini ने बातमी तयार केली. कृपया तपासून Draft जतन करा किंवा submit करा." });
+    } catch (error) { setMessage({ type: "error", text: error instanceof Error ? error.message : "AI request अयशस्वी झाली." }); }
+    setAiLoading(false);
+  }
+
   const disabled = savingAs !== null || submitted;
   return (
     <main className="min-h-screen bg-slate-50">
@@ -100,7 +118,7 @@ export default function NewsCreatorPage() {
       </div></header>
       <section className="mx-auto max-w-6xl px-6 py-8">
         <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500"><ArrowLeft size={16}/> मागे</Link>
-        <div className="mt-5 flex flex-col justify-between gap-4 md:flex-row md:items-end"><div><p className="text-sm font-semibold text-amber-600">REPORTER WORKSPACE</p><h1 className="mt-1 text-3xl font-black">{savedNewsId ? "बातमी edit करा" : "नवीन बातमी तयार करा"}</h1><p className="mt-1 text-sm text-slate-500">बातमी लिहा, AI मदत घ्या आणि editor कडे submit करा.</p></div><button type="button" className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white"><Sparkles size={17}/> Gemini AI</button></div>
+        <div className="mt-5 flex flex-col justify-between gap-4 md:flex-row md:items-end"><div><p className="text-sm font-semibold text-amber-600">REPORTER WORKSPACE</p><h1 className="mt-1 text-3xl font-black">{savedNewsId ? "बातमी edit करा" : "नवीन बातमी तयार करा"}</h1><p className="mt-1 text-sm text-slate-500">बातमी लिहा, AI मदत घ्या आणि editor कडे submit करा.</p></div><button type="button" onClick={() => document.getElementById("ai-notes")?.focus()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white"><Sparkles size={17}/> Gemini AI</button></div>
         {pageLoading ? <div className="mt-8 flex min-h-64 items-center justify-center rounded-2xl border bg-white text-sm font-semibold text-slate-500"><LoaderCircle className="mr-2 animate-spin" size={18}/> News Creator load होत आहे...</div> :
         <form onSubmit={(event) => saveNews(event, "submitted")} className="mt-8 grid gap-6 lg:grid-cols-[1fr_330px]">
           <div className="rounded-2xl border bg-white p-6 shadow-sm">
@@ -123,7 +141,7 @@ export default function NewsCreatorPage() {
           </div>
           <aside className="space-y-6">
             <div className="rounded-2xl border bg-white p-5 shadow-sm"><div className="flex items-center gap-3"><div className="rounded-xl bg-amber-50 p-3 text-amber-700"><ImagePlus size={20}/></div><div><h2 className="font-bold">Featured Image</h2><p className="text-xs text-slate-500">मुख्य फोटो upload करा</p></div></div><div className="mt-5 rounded-xl border-2 border-dashed border-slate-200 p-8 text-center text-sm text-slate-500">Image upload येथे येईल</div></div>
-            <div className="rounded-2xl bg-slate-900 p-5 text-white"><h2 className="font-bold">AI Assistant</h2><p className="mt-2 text-sm leading-6 text-slate-300">Raw information वरून headline, article, excerpt आणि SEO slug तयार करण्यासाठी Gemini जोडले जाईल.</p><button type="button" className="mt-5 w-full rounded-xl bg-white px-4 py-3 text-sm font-bold text-slate-900">AI ने बातमी तयार करा</button></div>
+            <div className="rounded-2xl bg-slate-900 p-5 text-white"><h2 className="font-bold">AI Assistant</h2><p className="mt-2 text-sm leading-6 text-slate-300">Raw information वरून headline, article, excerpt आणि SEO slug तयार करा.</p><textarea id="ai-notes" value={rawInfo} onChange={(event) => setRawInfo(event.target.value)} disabled={aiLoading || submitted} rows={7} placeholder="घटनेची तथ्ये, नावे, ठिकाण, वेळ आणि quotes येथे द्या..." className="mt-4 w-full resize-y rounded-xl border border-white/20 bg-white/10 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-400 focus:border-amber-400 disabled:opacity-60"/><button type="button" onClick={generateWithAi} disabled={aiLoading || submitted} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-bold text-slate-900 disabled:opacity-60">{aiLoading ? <><LoaderCircle className="animate-spin" size={17}/> AI बातमी तयार करत आहे...</> : "AI ने बातमी तयार करा"}</button></div>
           </aside>
         </form>}
       </section>
