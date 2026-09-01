@@ -29,6 +29,7 @@ export default function NewsCreatorPage() {
   const [categoryId, setCategoryId] = useState("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadCreator() {
@@ -36,15 +37,23 @@ export default function NewsCreatorPage() {
       if (!user) { window.location.href = "/login"; return; }
 
       setUserId(user.id);
-      const [profileResult, categoriesResult] = await Promise.all([
+      const editId = new URLSearchParams(window.location.search).get("id");
+      const [profileResult, categoriesResult, newsResult] = await Promise.all([
         supabase.from("profiles").select("full_name, role").eq("id", user.id).single(),
         supabase.from("categories").select("id, name").order("name"),
+        editId ? supabase.from("news").select("id, title, slug, excerpt, content, location, category_id, status, rejection_reason").eq("id", editId).eq("author_id", user.id).in("status", ["draft", "rejected"]).single() : Promise.resolve({ data: null, error: null }),
       ]);
 
       if (profileResult.error) setMessage({ type: "error", text: `Profile load झाला नाही: ${profileResult.error.message}` });
       else setProfile(profileResult.data as Profile);
       if (categoriesResult.error) setMessage({ type: "error", text: `Categories load झाल्या नाहीत: ${categoriesResult.error.message}` });
       else setCategories((categoriesResult.data ?? []) as Category[]);
+      if (editId && newsResult.error) setMessage({ type: "error", text: "ही बातमी edit करता येत नाही किंवा ती उपलब्ध नाही." });
+      else if (newsResult.data) {
+        setSavedNewsId(newsResult.data.id); setTitle(newsResult.data.title); setSlug(newsResult.data.slug ?? "");
+        setExcerpt(newsResult.data.excerpt ?? ""); setContent(newsResult.data.content); setLocation(newsResult.data.location ?? "");
+        setCategoryId(newsResult.data.category_id ?? ""); setRejectionReason(newsResult.data.rejection_reason);
+      }
       setPageLoading(false);
     }
     loadCreator();
@@ -91,10 +100,11 @@ export default function NewsCreatorPage() {
       </div></header>
       <section className="mx-auto max-w-6xl px-6 py-8">
         <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500"><ArrowLeft size={16}/> मागे</Link>
-        <div className="mt-5 flex flex-col justify-between gap-4 md:flex-row md:items-end"><div><p className="text-sm font-semibold text-amber-600">REPORTER WORKSPACE</p><h1 className="mt-1 text-3xl font-black">नवीन बातमी तयार करा</h1><p className="mt-1 text-sm text-slate-500">बातमी लिहा, AI मदत घ्या आणि editor कडे submit करा.</p></div><button type="button" className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white"><Sparkles size={17}/> Gemini AI</button></div>
+        <div className="mt-5 flex flex-col justify-between gap-4 md:flex-row md:items-end"><div><p className="text-sm font-semibold text-amber-600">REPORTER WORKSPACE</p><h1 className="mt-1 text-3xl font-black">{savedNewsId ? "बातमी edit करा" : "नवीन बातमी तयार करा"}</h1><p className="mt-1 text-sm text-slate-500">बातमी लिहा, AI मदत घ्या आणि editor कडे submit करा.</p></div><button type="button" className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white"><Sparkles size={17}/> Gemini AI</button></div>
         {pageLoading ? <div className="mt-8 flex min-h-64 items-center justify-center rounded-2xl border bg-white text-sm font-semibold text-slate-500"><LoaderCircle className="mr-2 animate-spin" size={18}/> News Creator load होत आहे...</div> :
         <form onSubmit={(event) => saveNews(event, "submitted")} className="mt-8 grid gap-6 lg:grid-cols-[1fr_330px]">
           <div className="rounded-2xl border bg-white p-6 shadow-sm">
+            {rejectionReason && <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><strong>Editor feedback:</strong> {rejectionReason}</div>}
             {message && <div role="status" className={`mb-5 rounded-xl border px-4 py-3 text-sm font-semibold ${message.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>{message.type === "success" && <CheckCircle2 className="mr-2 inline" size={17}/>} {message.text}</div>}
             <div className="grid gap-5 md:grid-cols-2">
               <label className="md:col-span-2"><span className="mb-2 block text-sm font-semibold">बातमीचे शीर्षक</span><input value={title} onChange={(e) => handleTitleChange(e.target.value)} disabled={disabled} placeholder="उदा. जिल्ह्यातील महत्त्वाची बातमी..." className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-500 disabled:bg-slate-50" /></label>
@@ -120,3 +130,4 @@ export default function NewsCreatorPage() {
     </main>
   );
 }
+
