@@ -6,7 +6,7 @@ import { ArrowLeft, CheckCircle2, ImagePlus, LoaderCircle, Send, Sparkles } from
 import { createClient } from "@/lib/supabase/client";
 
 type Profile = { full_name: string | null; role: "admin" | "editor" | "reporter" };
-type Category = { id: string; name: string };
+type Category = { id: string; name: string; parent_id: string | null };
 type SaveStatus = "draft" | "submitted";
 
 function makeSlug(value: string) {
@@ -44,7 +44,7 @@ export default function NewsCreatorPage() {
       const editId = new URLSearchParams(window.location.search).get("id");
       const [profileResult, categoriesResult, newsResult] = await Promise.all([
         supabase.from("profiles").select("full_name, role").eq("id", user.id).single(),
-        supabase.from("categories").select("id, name").order("name"),
+        supabase.from("categories").select("id, name, parent_id").order("name"),
         editId ? supabase.from("news").select("id, title, slug, excerpt, content, location, category_id, status, rejection_reason, featured_image_url").eq("id", editId).eq("author_id", user.id).in("status", ["draft", "rejected"]).single() : Promise.resolve({ data: null, error: null }),
       ]);
 
@@ -178,6 +178,7 @@ export default function NewsCreatorPage() {
   }
 
   const disabled = savingAs !== null || submitted;
+  const parentCategories = categories.filter((category) => !category.parent_id);
   return (
     <main className="min-h-screen bg-slate-50">
       <header className="border-b bg-white"><div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
@@ -194,7 +195,7 @@ export default function NewsCreatorPage() {
             {message && <div role="status" className={`mb-5 rounded-xl border px-4 py-3 text-sm font-semibold ${message.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>{message.type === "success" && <CheckCircle2 className="mr-2 inline" size={17}/>} {message.text}</div>}
             <div className="grid gap-5 md:grid-cols-2">
               <label className="md:col-span-2"><span className="mb-2 block text-sm font-semibold">बातमीचे शीर्षक</span><input value={title} onChange={(e) => handleTitleChange(e.target.value)} disabled={disabled} placeholder="उदा. जिल्ह्यातील महत्त्वाची बातमी..." className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-500 disabled:bg-slate-50" /></label>
-              <label><span className="mb-2 block text-sm font-semibold">Category</span><select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} disabled={disabled} className="w-full rounded-xl border border-slate-200 px-4 py-3 disabled:bg-slate-50"><option value="">निवडा</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+              <label><span className="mb-2 block text-sm font-semibold">Category</span><select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} disabled={disabled} className="w-full rounded-xl border border-slate-200 px-4 py-3 disabled:bg-slate-50"><option value="">निवडा</option>{parentCategories.map((parent) => { const children = categories.filter((category) => category.parent_id === parent.id); return children.length ? <optgroup key={parent.id} label={parent.name}><option value={parent.id}>{parent.name} — सर्व</option>{children.map((child) => <option key={child.id} value={child.id}>↳ {child.name}</option>)}</optgroup> : <option key={parent.id} value={parent.id}>{parent.name}</option>; })}</select></label>
               <label><span className="mb-2 block text-sm font-semibold">Location</span><input value={location} onChange={(e) => setLocation(e.target.value)} disabled={disabled} placeholder="शहर / तालुका / जिल्हा" className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-500 disabled:bg-slate-50" /></label>
               <label><span className="mb-2 block text-sm font-semibold">SEO Slug</span><input value={slug} onChange={(e) => setSlug(makeSlug(e.target.value))} disabled={disabled} placeholder="news-headline" className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-500 disabled:bg-slate-50" /></label>
               <label><span className="mb-2 block text-sm font-semibold">Author</span><input value={profile?.full_name || "Newsroom User"} disabled className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-500" /></label>
