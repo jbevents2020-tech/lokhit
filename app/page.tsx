@@ -1,19 +1,97 @@
-import { FileText, ImagePlus, LayoutDashboard, PenLine, Send, Sparkles, Users } from "lucide-react";
+"use client";
 
-const stats = [
-  ["एकूण बातम्या", "128", "या महिन्यात +18"],
-  ["प्रलंबित", "12", "Editor review"],
-  ["प्रकाशित", "96", "या महिन्यात"],
-  ["Reporters", "14", "Active users"],
-];
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { FileText, ImagePlus, LayoutDashboard, LogOut, PenLine, Send, Sparkles, Users } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
-const workflow = [
-  { label: "Draft", count: 24, icon: PenLine },
-  { label: "Submitted", count: 12, icon: Send },
-  { label: "Published", count: 96, icon: FileText },
-];
+type Profile = {
+  full_name: string | null;
+  role: "admin" | "editor" | "reporter";
+};
+
+type DashboardStats = {
+  total: number;
+  pending: number;
+  published: number;
+  reporters: number;
+  draft: number;
+  submitted: number;
+};
+
+const emptyStats: DashboardStats = {
+  total: 0,
+  pending: 0,
+  published: 0,
+  reporters: 0,
+  draft: 0,
+  submitted: 0,
+};
 
 export default function Home() {
+  const supabase = useMemo(() => createClient(), []);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [stats, setStats] = useState<DashboardStats>(emptyStats);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadDashboard() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        window.location.href = "/login";
+        return;
+      }
+
+      const [profileResult, totalResult, pendingResult, publishedResult, reportersResult, draftResult, submittedResult] = await Promise.all([
+        supabase.from("profiles").select("full_name, role").eq("id", user.id).single(),
+        supabase.from("news").select("id", { count: "exact", head: true }),
+        supabase.from("news").select("id", { count: "exact", head: true }).in("status", ["submitted", "in_review", "approved"]),
+        supabase.from("news").select("id", { count: "exact", head: true }).eq("status", "published"),
+        supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "reporter").eq("is_active", true),
+        supabase.from("news").select("id", { count: "exact", head: true }).eq("status", "draft"),
+        supabase.from("news").select("id", { count: "exact", head: true }).eq("status", "submitted"),
+      ]);
+
+      if (profileResult.data) setProfile(profileResult.data as Profile);
+
+      setStats({
+        total: totalResult.count ?? 0,
+        pending: pendingResult.count ?? 0,
+        published: publishedResult.count ?? 0,
+        reporters: reportersResult.count ?? 0,
+        draft: draftResult.count ?? 0,
+        submitted: submittedResult.count ?? 0,
+      });
+      setLoading(false);
+    }
+
+    loadDashboard();
+  }, [supabase]);
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    window.location.href = "/login";
+  }
+
+  const roleLabel = profile?.role ? profile.role.charAt(0).toUpperCase() + profile.role.slice(1) : "User";
+  const avatarLetter = profile?.full_name?.trim()?.charAt(0)?.toUpperCase() || "U";
+
+  const cards = [
+    ["एकूण बातम्या", stats.total, "Live database"],
+    ["प्रलंबित", stats.pending, "Editor review"],
+    ["प्रकाशित", stats.published, "Published"],
+    ["Reporters", stats.reporters, "Active users"],
+  ] as const;
+
+  const workflow = [
+    { label: "Draft", count: stats.draft, icon: PenLine },
+    { label: "Submitted", count: stats.submitted, icon: Send },
+    { label: "Published", count: stats.published, icon: FileText },
+  ];
+
   return (
     <main className="min-h-screen bg-slate-50">
       <header className="border-b bg-white">
@@ -23,8 +101,9 @@ export default function Home() {
             <div className="text-xs text-slate-500">Digital News Publishing Platform</div>
           </div>
           <div className="flex items-center gap-3">
-            <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">Admin</span>
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-bold text-white">A</div>
+            <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">{roleLabel}</span>
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-bold text-white">{avatarLetter}</div>
+            <button onClick={handleLogout} title="Logout" className="rounded-xl border border-slate-200 p-2 text-slate-600 hover:bg-slate-50 hover:text-slate-950"><LogOut size={17}/></button>
           </div>
         </div>
       </header>
@@ -33,7 +112,7 @@ export default function Home() {
         <aside className="hidden border-r bg-white p-4 md:block">
           <nav className="space-y-1 text-sm">
             <div className="flex items-center gap-3 rounded-xl bg-slate-900 px-4 py-3 font-semibold text-white"><LayoutDashboard size={17}/> Dashboard</div>
-            <div className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-600"><PenLine size={17}/> नवीन बातमी</div>
+            <Link href="/news" className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-600 hover:bg-slate-50"><PenLine size={17}/> नवीन बातमी</Link>
             <div className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-600"><FileText size={17}/> सर्व बातम्या</div>
             <div className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-600"><Users size={17}/> Reporters</div>
             <div className="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-600"><Sparkles size={17}/> Gemini AI</div>
@@ -42,18 +121,18 @@ export default function Home() {
 
         <section className="p-6 md:p-8">
           <div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-            <div><p className="text-sm font-semibold text-amber-600">GOOD EVENING</p><h1 className="mt-1 text-3xl font-black">Newsroom Dashboard</h1><p className="mt-1 text-sm text-slate-500">आजच्या newsroom कामाचा आढावा</p></div>
-            <button className="flex items-center justify-center gap-2 rounded-xl bg-amber-600 px-5 py-3 text-sm font-bold text-white shadow-sm"><PenLine size={17}/> नवीन बातमी तयार करा</button>
+            <div><p className="text-sm font-semibold text-amber-600">WELCOME</p><h1 className="mt-1 text-3xl font-black">Newsroom Dashboard</h1><p className="mt-1 text-sm text-slate-500">{profile?.full_name || "Newsroom User"} यांचा live newsroom आढावा</p></div>
+            <Link href="/news" className="flex items-center justify-center gap-2 rounded-xl bg-amber-600 px-5 py-3 text-sm font-bold text-white shadow-sm"><PenLine size={17}/> नवीन बातमी तयार करा</Link>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {stats.map(([title, value, note]) => <div key={title} className="rounded-2xl border bg-white p-5 shadow-sm"><p className="text-sm text-slate-500">{title}</p><p className="mt-2 text-3xl font-black">{value}</p><p className="mt-1 text-xs font-medium text-emerald-600">{note}</p></div>)}
+            {cards.map(([title, value, note]) => <div key={title} className="rounded-2xl border bg-white p-5 shadow-sm"><p className="text-sm text-slate-500">{title}</p><p className="mt-2 text-3xl font-black">{loading ? "…" : value}</p><p className="mt-1 text-xs font-medium text-emerald-600">{note}</p></div>)}
           </div>
 
           <div className="mt-6 grid gap-6 lg:grid-cols-[1.4fr_1fr]">
             <div className="rounded-2xl border bg-white p-6 shadow-sm">
               <div className="flex items-center justify-between"><div><h2 className="font-bold">Publishing Workflow</h2><p className="text-sm text-slate-500">बातमी कोणत्या stage वर आहे</p></div><Sparkles className="text-amber-600" size={20}/></div>
-              <div className="mt-6 space-y-4">{workflow.map(({label,count,icon:Icon}) => <div key={label} className="flex items-center gap-4"><div className="rounded-xl bg-slate-100 p-3"><Icon size={18}/></div><div className="flex-1"><div className="flex justify-between text-sm font-semibold"><span>{label}</span><span>{count}</span></div><div className="mt-2 h-2 rounded-full bg-slate-100"><div className="h-2 rounded-full bg-amber-500" style={{width:`${Math.min(count,100)}%`}} /></div></div></div>)}</div>
+              <div className="mt-6 space-y-4">{workflow.map(({label,count,icon:Icon}) => <div key={label} className="flex items-center gap-4"><div className="rounded-xl bg-slate-100 p-3"><Icon size={18}/></div><div className="flex-1"><div className="flex justify-between text-sm font-semibold"><span>{label}</span><span>{loading ? "…" : count}</span></div><div className="mt-2 h-2 rounded-full bg-slate-100"><div className="h-2 rounded-full bg-amber-500" style={{width:`${Math.min(count,100)}%`}} /></div></div></div>)}</div>
             </div>
             <div className="rounded-2xl border bg-slate-900 p-6 text-white shadow-sm">
               <div className="flex items-center gap-3"><div className="rounded-xl bg-white/10 p-3"><Sparkles size={20}/></div><div><h2 className="font-bold">Gemini AI</h2><p className="text-xs text-slate-300">News writing assistant</p></div></div>
@@ -62,7 +141,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="mt-6 rounded-2xl border bg-white p-6 shadow-sm"><div className="flex items-center gap-3"><ImagePlus size={20} className="text-amber-600"/><div><h2 className="font-bold">Next: News Creator</h2><p className="text-sm text-slate-500">Reporter → Editor → WordPress publishing workflow पुढील phase मध्ये जोडला जाईल.</p></div></div></div>
+          <div className="mt-6 rounded-2xl border bg-white p-6 shadow-sm"><div className="flex items-center gap-3"><ImagePlus size={20} className="text-amber-600"/><div><h2 className="font-bold">Live Supabase Dashboard</h2><p className="text-sm text-slate-500">Dashboard counts आता Supabase मधील actual profiles आणि news records वर आधारित आहेत.</p></div></div></div>
         </section>
       </div>
     </main>
