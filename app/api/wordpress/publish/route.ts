@@ -16,6 +16,27 @@ async function wordpressRequest(url: string, authorization: string, init: Reques
   return { payload, location: response.headers.get("location") };
 }
 
+type WordPressCategory = { id: number; name: string };
+type WordPressUser = { id: number; name: string; email?: string };
+
+async function wordpressCollection<T>(url: string, authorization: string, label: string): Promise<T[]> {
+  const response = await fetch(url, {
+    headers: { Authorization: authorization },
+    signal: AbortSignal.timeout(45000),
+  });
+  const payload: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message = payload && typeof payload === "object" && "message" in payload && typeof payload.message === "string" ? payload.message : null;
+    throw new Error(message || `${label} request failed (${response.status}).`);
+  }
+  if (!Array.isArray(payload)) throw new Error(`${label} response अपूर्ण आहे.`);
+  return payload as T[];
+}
+
+function normalize(value: string) {
+  return value.normalize("NFC").trim().toLocaleLowerCase("mr-IN");
+}
+
 export async function POST(request: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -40,7 +61,7 @@ export async function POST(request: Request) {
   const newsId = typeof body?.newsId === "string" ? body.newsId : "";
   if (!/^[0-9a-f-]{36}$/i.test(newsId)) return NextResponse.json({ error: "Invalid news id." }, { status: 400 });
   const { data: news, error: newsError } = await supabase.from("news")
-    .select("id, title, slug, excerpt, content, featured_image_url, wordpress_post_id")
+    .select("id, title, slug, excerpt, content, featured_image_url, wordpress_post_id, category:categories(name), author:profiles!news_author_id_fkey(full_name, email)")
     .eq("id", newsId).eq("status", "approved").single();
   if (newsError || !news) return NextResponse.json({ error: "Approved बातमी उपलब्ध नाही." }, { status: 404 });
   if (news.wordpress_post_id) return NextResponse.json({ error: "ही बातमी आधीच WordPress वर publish झाली आहे." }, { status: 409 });
@@ -48,6 +69,28 @@ export async function POST(request: Request) {
 
   const authorization = `Basic ${Buffer.from(`${wordpressUsername}:${wordpressPassword}`).toString("base64")}`;
   try {
+    const category = Array.isArray(news.category) ? news.category[0] : news.category;
+    const author = Array.isArray(news.author) ? news.author[0] : news.author;
+    const categoryName = category?.name?.trim();
+    if (!categoryName) return NextResponse.json({ error: "या बातमीसाठी Category निवडलेली नाही." }, { status: 400 });
+    const wordpressCategories = await wordpressCollection<WordPressCategory>(
+      `${wordpressUrl}/wp-json/wp/v2/categories?per_page=100&hide_empty=false`, authorization, "WordPress Categories",
+    );
+    const wordpressCategory = wordpressCategories.find((category) => normalize(category.name) === normalize(categoryName));
+    if (!wordpressCategory) return NextResponse.json({ error: `“${categoryName}” ही Category WordPress वर उपलब्ध नाही.` }, { status: 400 });
+
+    const reporterEmail = author?.email?.trim().toLowerCase();
+    const reporterName = author?.full_name?.trim();
+    if (!reporterEmail && !reporterName) return NextResponse.json({ error: "बातमीच्या वार्ताहराची profile माहिती उपलब्ध नाही." }, { status: 400 });
+    const wordpressUsers = await wordpressCollection<WordPressUser>(
+      `${wordpressUrl}/wp-json/wp/v2/users?context=edit&per_page=100`, authorization, "WordPress Authors",
+    );
+    const wordpressAuthor = wordpressUsers.find((author) => reporterEmail && author.email?.trim().toLowerCase() === reporterEmail)
+      ?? wordpressUsers.find((author) => reporterName && normalize(author.name) === normalize(reporterName));
+    if (!wordpressAuthor) {
+      return NextResponse.json({ error: `“${reporterName || reporterEmail}” या वार्ताहरासाठी WordPress user उपलब्ध नाही. समान email असलेला WordPress Author तयार करा.` }, { status: 400 });
+    }
+
     let featuredMedia: number | undefined;
     if (news.featured_image_url) {
       const imageUrl = new URL(news.featured_image_url);
@@ -77,6 +120,7 @@ export async function POST(request: Request) {
         title: news.title, slug: news.slug || undefined,
         excerpt: news.excerpt ? textToHtml(news.excerpt) : undefined,
         content: textToHtml(news.content), status: "publish", featured_media: featuredMedia,
+        categories: [wordpressCategory.id], author: wordpressAuthor.id,
       }),
     }, "WordPress Post publish");
     const postLocationId = post.location?.match(/\/posts\/(\d+)\/?$/)?.[1];
