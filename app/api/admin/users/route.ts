@@ -61,6 +61,8 @@ export async function DELETE(request: Request) {
   const id = new URL(request.url).searchParams.get("id") || "";
   const { data: target } = await context.admin.from("profiles").select("role").eq("id", id).single();
   if (!id || target?.role === "admin" || id === context.userId) return NextResponse.json({ error: "Admin account delete करता येणार नाही." }, { status: 400 });
+  const { count: authoredNews } = await context.admin.from("news").select("id", { count: "exact", head: true }).eq("author_id", id);
+  if ((authoredNews ?? 0) > 0) return NextResponse.json({ error: "या userच्या बातम्या उपलब्ध आहेत. Reporterचे नाव जतन ठेवण्यासाठी user delete न करता Inactive करा." }, { status: 409 });
   const { error } = await context.admin.auth.admin.deleteUser(id);
   return error ? NextResponse.json({ error: error.message }, { status: 500 }) : NextResponse.json({ success: true });
 }

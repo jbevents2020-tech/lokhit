@@ -21,7 +21,7 @@ async function wordpressRequest(url: string, authorization: string, init: Reques
 }
 
 type WordPressCategory = { id: number; name: string };
-type WordPressUser = { id: number; name: string; email?: string };
+type WordPressUser = { id: number; name: string; slug?: string };
 type WordPressTag = { id: number; name: string };
 
 async function wordpressCollection<T>(url: string, authorization: string, label: string): Promise<T[]> {
@@ -104,9 +104,10 @@ export async function POST(request: Request) {
     const reporterName = author?.full_name?.trim();
     if (!reporterEmail && !reporterName) return NextResponse.json({ error: "बातमीच्या वार्ताहराची profile माहिती उपलब्ध नाही." }, { status: 400 });
     const wordpressUsers = await wordpressCollection<WordPressUser>(
-      `${wordpressUrl}/wp-json/wp/v2/users?context=edit&per_page=100`, authorization, "WordPress Authors",
+      `${wordpressUrl}/wp-json/wp/v2/users?per_page=100`, authorization, "WordPress Authors",
     );
-    const wordpressAuthor = wordpressUsers.find((author) => reporterEmail && author.email?.trim().toLowerCase() === reporterEmail)
+    const reporterEmailName = reporterEmail?.split("@")[0];
+    const wordpressAuthor = wordpressUsers.find((author) => reporterEmailName && author.slug?.trim().toLowerCase() === reporterEmailName)
       ?? wordpressUsers.find((author) => reporterName && normalize(author.name) === normalize(reporterName));
     if (!wordpressAuthor) {
       return NextResponse.json({ error: `“${reporterName || reporterEmail}” या वार्ताहरासाठी WordPress user उपलब्ध नाही. समान email असलेला WordPress Author तयार करा.` }, { status: 400 });
