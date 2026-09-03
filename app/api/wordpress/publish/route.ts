@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+function escapeHtml(value: string) {
+  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+}
+
 function textToHtml(value: string) {
-  const escaped = value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+  const escaped = escapeHtml(value);
   return escaped.split(/\n{2,}/).map((paragraph) => `<p>${paragraph.replaceAll("\n", "<br>")}</p>`).join("\n");
 }
 
@@ -18,6 +22,7 @@ async function wordpressRequest(url: string, authorization: string, init: Reques
 
 type WordPressCategory = { id: number; name: string };
 type WordPressUser = { id: number; name: string; email?: string };
+type WordPressTag = { id: number; name: string };
 
 async function wordpressCollection<T>(url: string, authorization: string, label: string): Promise<T[]> {
   const response = await fetch(url, {
@@ -35,6 +40,22 @@ async function wordpressCollection<T>(url: string, authorization: string, label:
 
 function normalize(value: string) {
   return value.normalize("NFC").trim().toLocaleLowerCase("mr-IN");
+}
+
+async function resolveWordPressTag(wordpressUrl: string, authorization: string, keyword: string) {
+  const matches = await wordpressCollection<WordPressTag>(
+    `${wordpressUrl}/wp-json/wp/v2/tags?search=${encodeURIComponent(keyword)}&per_page=100`, authorization, "WordPress Tags",
+  );
+  const existing = matches.find((tag) => normalize(tag.name) === normalize(keyword));
+  if (existing) return existing.id;
+  const created = await wordpressRequest(`${wordpressUrl}/wp-json/wp/v2/tags`, authorization, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: keyword }),
+  }, "WordPress Tag create");
+  const tagId = typeof created.payload?.id === "number" ? created.payload.id : 0;
+  if (!tagId) throw new Error(`“${keyword}” हा SEO Keyword WordPress Tag म्हणून तयार झाला नाही.`);
+  return tagId;
 }
 
 export async function POST(request: Request) {
@@ -61,7 +82,7 @@ export async function POST(request: Request) {
   const newsId = typeof body?.newsId === "string" ? body.newsId : "";
   if (!/^[0-9a-f-]{36}$/i.test(newsId)) return NextResponse.json({ error: "Invalid news id." }, { status: 400 });
   const { data: news, error: newsError } = await supabase.from("news")
-    .select("id, title, slug, excerpt, content, featured_image_url, wordpress_post_id, category:categories(name), author:profiles!news_author_id_fkey(full_name, email)")
+    .select("id, title, slug, excerpt, content, location, seo_keywords, featured_image_url, wordpress_post_id, category:categories(name), author:profiles!news_author_id_fkey(full_name, email)")
     .eq("id", newsId).eq("status", "approved").single();
   if (newsError || !news) return NextResponse.json({ error: "Approved बातमी उपलब्ध नाही." }, { status: 404 });
   if (news.wordpress_post_id) return NextResponse.json({ error: "ही बातमी आधीच WordPress वर publish झाली आहे." }, { status: 409 });
@@ -91,6 +112,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `“${reporterName || reporterEmail}” या वार्ताहरासाठी WordPress user उपलब्ध नाही. समान email असलेला WordPress Author तयार करा.` }, { status: 400 });
     }
 
+    const seoKeywords = Array.isArray(news.seo_keywords)
+      ? news.seo_keywords.filter((keyword): keyword is string => typeof keyword === "string" && Boolean(keyword.trim())).map((keyword) => keyword.trim()).slice(0, 10)
+      : [];
+    const wordpressTagIds = await Promise.all(seoKeywords.map((keyword) => resolveWordPressTag(wordpressUrl, authorization, keyword)));
+    const locationPrefix = news.location?.trim() ? `<p><strong>स्थान: ${escapeHtml(news.location.trim())}</strong></p>\n` : "";
+
     let featuredMedia: number | undefined;
     if (news.featured_image_url) {
       const imageUrl = new URL(news.featured_image_url);
@@ -119,8 +146,8 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         title: news.title, slug: news.slug || undefined,
         excerpt: news.excerpt ? textToHtml(news.excerpt) : undefined,
-        content: textToHtml(news.content), status: "publish", featured_media: featuredMedia,
-        categories: [wordpressCategory.id], author: wordpressAuthor.id,
+        content: `${locationPrefix}${textToHtml(news.content)}`, status: "publish", featured_media: featuredMedia,
+        categories: [wordpressCategory.id], author: wordpressAuthor.id, tags: wordpressTagIds,
       }),
     }, "WordPress Post publish");
     const postLocationId = post.location?.match(/\/posts\/(\d+)\/?$/)?.[1];
