@@ -24,6 +24,7 @@ export default function NewsCreatorPage() {
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [excerpt, setExcerpt] = useState("");
+  const [seoKeywords, setSeoKeywords] = useState("");
   const [content, setContent] = useState("");
   const [location, setLocation] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -45,7 +46,7 @@ export default function NewsCreatorPage() {
       const [profileResult, categoriesResult, newsResult] = await Promise.all([
         supabase.from("profiles").select("full_name, role").eq("id", user.id).single(),
         supabase.from("categories").select("id, name, parent_id").order("name"),
-        editId ? supabase.from("news").select("id, title, slug, excerpt, content, location, category_id, status, rejection_reason, featured_image_url").eq("id", editId).eq("author_id", user.id).in("status", ["draft", "rejected"]).single() : Promise.resolve({ data: null, error: null }),
+        editId ? supabase.from("news").select("id, title, slug, excerpt, content, seo_keywords, location, category_id, status, rejection_reason, featured_image_url").eq("id", editId).eq("author_id", user.id).in("status", ["draft", "rejected"]).single() : Promise.resolve({ data: null, error: null }),
       ]);
 
       if (profileResult.error) setMessage({ type: "error", text: `Profile load झाला नाही: ${profileResult.error.message}` });
@@ -55,7 +56,7 @@ export default function NewsCreatorPage() {
       if (editId && newsResult.error) setMessage({ type: "error", text: "ही बातमी edit करता येत नाही किंवा ती उपलब्ध नाही." });
       else if (newsResult.data) {
         setSavedNewsId(newsResult.data.id); setTitle(newsResult.data.title); setSlug(newsResult.data.slug ?? "");
-        setExcerpt(newsResult.data.excerpt ?? ""); setContent(newsResult.data.content); setLocation(newsResult.data.location ?? "");
+        setExcerpt(newsResult.data.excerpt ?? ""); setContent(newsResult.data.content); setSeoKeywords((newsResult.data.seo_keywords ?? []).join(", ")); setLocation(newsResult.data.location ?? "");
         setCategoryId(newsResult.data.category_id ?? ""); setRejectionReason(newsResult.data.rejection_reason);
         setFeaturedImagePreview(newsResult.data.featured_image_url ?? null);
       }
@@ -130,7 +131,7 @@ export default function NewsCreatorPage() {
     setSavingAs(status);
     const newsRecord = {
       title: title.trim(), slug: slug.trim() || null, excerpt: excerpt.trim() || null,
-      content: content.trim(), location: location.trim() || null, category_id: categoryId || null,
+      content: content.trim(), seo_keywords: seoKeywords.split(",").map((keyword) => keyword.trim()).filter(Boolean), location: location.trim() || null, category_id: categoryId || null,
       author_id: userId, status: featuredImage ? "draft" : status, updated_at: new Date().toISOString(),
     };
     const result = savedNewsId
@@ -171,8 +172,8 @@ export default function NewsCreatorPage() {
       const response = await fetch("/api/gemini", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ rawInfo }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "AI request अयशस्वी झाली.");
-      setTitle(result.article.title); setExcerpt(result.article.excerpt); setContent(result.article.content); setSlug(makeSlug(result.article.slug || result.article.title));
-      setMessage({ type: "success", text: "Gemini ने बातमी तयार केली. कृपया तपासून Draft जतन करा किंवा submit करा." });
+      setTitle(result.article.title); setExcerpt(result.article.excerpt); setContent(result.article.content); setSlug(makeSlug(result.article.slug || result.article.title)); setSeoKeywords((result.article.seoKeywords ?? []).join(", "));
+      setMessage({ type: "success", text: "Internet संदर्भ तपासून Gemini ने सविस्तर बातमी आणि SEO Keywords तयार केले. कृपया तपासून Draft जतन करा किंवा submit करा." });
     } catch (error) { setMessage({ type: "error", text: error instanceof Error ? error.message : "AI request अयशस्वी झाली." }); }
     setAiLoading(false);
   }
@@ -200,6 +201,7 @@ export default function NewsCreatorPage() {
               <label><span className="mb-2 block text-sm font-semibold">SEO Slug</span><input value={slug} onChange={(e) => setSlug(makeSlug(e.target.value))} disabled={disabled} placeholder="news-headline" className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-500 disabled:bg-slate-50" /></label>
               <label><span className="mb-2 block text-sm font-semibold">Author</span><input value={profile?.full_name || "Newsroom User"} disabled className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-500" /></label>
               <label className="md:col-span-2"><span className="mb-2 block text-sm font-semibold">Excerpt</span><textarea value={excerpt} onChange={(e) => setExcerpt(e.target.value)} disabled={disabled} rows={3} placeholder="बातमीचा संक्षिप्त सारांश..." className="w-full resize-y rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-500 disabled:bg-slate-50" /></label>
+              <label className="md:col-span-2"><span className="mb-2 block text-sm font-semibold">SEO Keywords</span><textarea value={seoKeywords} onChange={(e) => setSeoKeywords(e.target.value)} disabled={disabled} rows={2} placeholder="AI तयार केलेले keywords comma ने वेगळे दिसतील" className="w-full resize-y rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-500 disabled:bg-slate-50" /></label>
               <label className="md:col-span-2"><span className="mb-2 block text-sm font-semibold">बातमीचा मजकूर</span><textarea value={content} onChange={(e) => setContent(e.target.value)} disabled={disabled} rows={12} placeholder="बातमीची संपूर्ण माहिती येथे लिहा..." className="w-full resize-y rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-500 disabled:bg-slate-50" /></label>
             </div>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">

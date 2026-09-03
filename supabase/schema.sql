@@ -273,3 +273,5 @@ using (
   and ((storage.foldername(name))[1] = auth.uid()::text or public.current_user_role() in ('admin', 'editor'))
 );
 
+alter table public.news add column if not exists seo_keywords text[] not null default '{}';
+
