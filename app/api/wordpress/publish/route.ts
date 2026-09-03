@@ -21,7 +21,7 @@ async function wordpressRequest(url: string, authorization: string, init: Reques
 }
 
 type WordPressCategory = { id: number; name: string };
-type WordPressUser = { id: number; name: string; slug?: string };
+type WordPressUser = { id: number; name: string; slug?: string; email?: string };
 type WordPressTag = { id: number; name: string };
 
 async function wordpressCollection<T>(url: string, authorization: string, label: string): Promise<T[]> {
@@ -103,14 +103,37 @@ export async function POST(request: Request) {
     const reporterEmail = author?.email?.trim().toLowerCase();
     const reporterName = author?.full_name?.trim();
     if (!reporterEmail && !reporterName) return NextResponse.json({ error: "बातमीच्या वार्ताहराची profile माहिती उपलब्ध नाही." }, { status: 400 });
-    const wordpressUsers = await wordpressCollection<WordPressUser>(
+    let wordpressUsers = await wordpressCollection<WordPressUser>(
       `${wordpressUrl}/wp-json/wp/v2/users?per_page=100`, authorization, "WordPress Authors",
     );
+    const editableUsersResponse = await fetch(`${wordpressUrl}/wp-json/wp/v2/users?context=edit&per_page=100`, {
+      headers: { Authorization: authorization }, signal: AbortSignal.timeout(30000),
+    });
+    if (editableUsersResponse.ok) {
+      const editableUsers = await editableUsersResponse.json().catch(() => []) as WordPressUser[];
+      if (Array.isArray(editableUsers)) wordpressUsers = editableUsers;
+    }
     const reporterEmailName = reporterEmail?.split("@")[0];
-    const wordpressAuthor = wordpressUsers.find((author) => reporterEmailName && author.slug?.trim().toLowerCase() === reporterEmailName)
+    const reporterEmailSlug = reporterEmail?.replace("@", "").replaceAll(".", "-");
+    let wordpressAuthor = wordpressUsers.find((author) => reporterEmail && author.email?.trim().toLowerCase() === reporterEmail)
+      ?? wordpressUsers.find((author) => reporterEmailName && [reporterEmailName, reporterEmailSlug].includes(author.slug?.trim().toLowerCase()))
       ?? wordpressUsers.find((author) => reporterName && normalize(author.name) === normalize(reporterName));
     if (!wordpressAuthor) {
-      return NextResponse.json({ error: `“${reporterName || reporterEmail}” या वार्ताहरासाठी WordPress user उपलब्ध नाही. समान email असलेला WordPress Author तयार करा.` }, { status: 400 });
+      if (!reporterEmail || !reporterName) return NextResponse.json({ error: "WordPress Author तयार करण्यासाठी वार्ताहराचे पूर्ण नाव आणि email आवश्यक आहे." }, { status: 400 });
+      const createdAuthor = await wordpressRequest(`${wordpressUrl}/wp-json/wp/v2/users`, authorization, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: reporterEmailSlug || `wartahar-${crypto.randomUUID().slice(0, 8)}`,
+          email: reporterEmail,
+          name: reporterName,
+          password: `${crypto.randomUUID()}-${crypto.randomUUID()}`,
+          roles: ["author"],
+        }),
+      }, "WordPress Author create");
+      const createdAuthorId = Number(createdAuthor.payload?.id);
+      if (!Number.isInteger(createdAuthorId) || createdAuthorId <= 0) throw new Error(`“${reporterName}” यांचा WordPress Author तयार झाला नाही.`);
+      wordpressAuthor = { id: createdAuthorId, name: reporterName, email: reporterEmail };
     }
 
     const seoKeywords = Array.isArray(news.seo_keywords)
