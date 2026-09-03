@@ -32,8 +32,8 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-10">
-      <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl">
+    <main className="flex min-h-[100dvh] items-center justify-center bg-slate-950 px-3 py-6 sm:px-4 sm:py-10">
+      <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl sm:rounded-3xl sm:p-8">
         <Link href="/" className="mb-8 inline-flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-slate-900"><ArrowLeft size={16}/> Dashboard</Link>
         <div className="mb-8 flex items-center gap-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-600 text-white"><Newspaper size={24}/></div>

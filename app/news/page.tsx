@@ -182,16 +182,16 @@ export default function NewsCreatorPage() {
   const parentCategories = categories.filter((category) => !category.parent_id);
   return (
     <main className="min-h-screen bg-slate-50">
-      <header className="border-b bg-white"><div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+      <header className="border-b bg-white"><div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
         <div><div className="text-xl font-black">लोकहित <span className="text-amber-600">Newsroom</span></div><div className="text-xs text-slate-500">News Creator</div></div>
         <div className="flex items-center gap-3"><span className="hidden text-xs font-semibold text-slate-500 sm:inline">{profile?.full_name || "Newsroom User"} · {profile?.role || "user"}</span><Link href="/" className="text-sm font-semibold text-slate-600 hover:text-slate-950">Dashboard</Link></div>
       </div></header>
-      <section className="mx-auto max-w-6xl px-6 py-8">
+      <section className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
         <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500"><ArrowLeft size={16}/> मागे</Link>
         <div className="mt-5 flex flex-col justify-between gap-4 md:flex-row md:items-end"><div><p className="text-sm font-semibold text-amber-600">REPORTER WORKSPACE</p><h1 className="mt-1 text-3xl font-black">{savedNewsId ? "बातमी edit करा" : "नवीन बातमी तयार करा"}</h1><p className="mt-1 text-sm text-slate-500">बातमी लिहा, AI मदत घ्या आणि editor कडे submit करा.</p></div><button type="button" onClick={() => document.getElementById("ai-notes")?.focus()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white"><Sparkles size={17}/> Gemini AI</button></div>
         {pageLoading ? <div className="mt-8 flex min-h-64 items-center justify-center rounded-2xl border bg-white text-sm font-semibold text-slate-500"><LoaderCircle className="mr-2 animate-spin" size={18}/> News Creator load होत आहे...</div> :
         <form onSubmit={(event) => saveNews(event, "submitted")} className="mt-8 grid gap-6 lg:grid-cols-[1fr_330px]">
-          <div className="rounded-2xl border bg-white p-6 shadow-sm">
+          <div className="min-w-0 rounded-2xl border bg-white p-4 shadow-sm sm:p-6">
             {rejectionReason && <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><strong>Editor feedback:</strong> {rejectionReason}</div>}
             {message && <div role="status" className={`mb-5 rounded-xl border px-4 py-3 text-sm font-semibold ${message.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>{message.type === "success" && <CheckCircle2 className="mr-2 inline" size={17}/>} {message.text}</div>}
             <div className="grid gap-5 md:grid-cols-2">

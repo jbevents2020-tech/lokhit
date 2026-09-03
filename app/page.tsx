@@ -123,9 +123,9 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-slate-50">
       <header className="border-b bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
           <div>
-            <div className="text-2xl font-black tracking-tight">लोकहित <span className="text-amber-600">Newsroom</span></div>
+            <div className="text-xl font-black tracking-tight sm:text-2xl">लोकहित <span className="text-amber-600">Newsroom</span></div>
             <div className="text-xs text-slate-500">Digital News Publishing Platform</div>
           </div>
           <div className="flex items-center gap-3">
@@ -135,6 +135,17 @@ export default function Home() {
           </div>
         </div>
       </header>
+
+      <nav aria-label="Mobile navigation" className="sticky top-0 z-20 overflow-x-auto border-b bg-white/95 px-3 py-2 backdrop-blur md:hidden">
+        <div className="flex min-w-max gap-2 text-xs font-bold">
+          <span className="rounded-lg bg-slate-900 px-3 py-2 text-white">Dashboard</span>
+          <Link href="/news" className="rounded-lg bg-amber-50 px-3 py-2 text-amber-800">नवीन बातमी</Link>
+          <Link href="/my-news" className="rounded-lg bg-slate-100 px-3 py-2 text-slate-700">माझ्या बातम्या</Link>
+          {(profile?.role === "admin" || profile?.role === "editor") && <Link href="/review" className="rounded-lg bg-slate-100 px-3 py-2 text-slate-700">Review</Link>}
+          {(profile?.role === "admin" || profile?.role === "editor") && <Link href="/all-news" className="rounded-lg bg-slate-100 px-3 py-2 text-slate-700">सर्व बातम्या</Link>}
+          {profile?.role === "admin" && <Link href="/users" className="rounded-lg bg-slate-100 px-3 py-2 text-slate-700">Users</Link>}
+        </div>
+      </nav>
 
       <div className="mx-auto grid max-w-7xl grid-cols-1 md:grid-cols-[220px_1fr]">
         <aside className="hidden border-r bg-white p-4 md:block">
@@ -149,7 +160,7 @@ export default function Home() {
           </nav>
         </aside>
 
-        <section className="p-6 md:p-8">
+        <section className="min-w-0 p-4 sm:p-6 md:p-8">
           <div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
             <div><p className="text-sm font-semibold text-amber-600">WELCOME</p><h1 className="mt-1 text-3xl font-black">Newsroom Dashboard</h1><p className="mt-1 text-sm text-slate-500">{profile?.full_name || "Newsroom User"} यांचा live newsroom आढावा</p></div>
             <Link href="/news" className="flex items-center justify-center gap-2 rounded-xl bg-amber-600 px-5 py-3 text-sm font-bold text-white shadow-sm"><PenLine size={17}/> नवीन बातमी तयार करा</Link>

@@ -4,3 +4,19 @@
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--paper); color: var(--ink); font-family: Arial, Helvetica, sans-serif; }
 button, input, textarea, select { font: inherit; }
+html { -webkit-text-size-adjust: 100%; }
+body { overflow-x: hidden; }
+input, textarea, select { min-width: 0; }
+button, a { -webkit-tap-highlight-color: transparent; }
+@media (max-width: 640px) {
+  button, input, textarea, select { font-size: 16px; }
+  main > header > div { gap: .75rem; padding: .75rem 1rem; }
+  main > section { min-width: 0; padding: 1.5rem 1rem; }
+  main h1 { overflow-wrap: anywhere; font-size: 1.75rem; line-height: 1.2; }
+  main h2, main h3, main p, main a, main span { overflow-wrap: anywhere; }
+  main article, main form, main aside, main section > div { min-width: 0; }
+  main .p-6 { padding: 1rem; }
+  main .p-12 { padding: 2rem 1rem; }
+  main .flex.gap-2 { flex-wrap: wrap; }
+  main .flex.gap-2 > button, main .flex.gap-2 > a { min-height: 44px; }
+}
