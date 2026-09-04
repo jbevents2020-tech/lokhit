@@ -108,10 +108,10 @@ export default function Home() {
   const avatarLetter = profile?.full_name?.trim()?.charAt(0)?.toUpperCase() || "U";
 
   const cards = [
-    ["एकूण बातम्या", stats.total, "Live database"],
-    ["प्रलंबित", stats.pending, "Editor review"],
-    ["प्रकाशित", stats.published, "Published"],
-    ["Reporters", stats.reporters, "Active users"],
+    ["एकूण बातम्या", stats.total, "Live database", null],
+    ["प्रलंबित बातम्या", stats.pending, "Editor review", "/review"],
+    ["प्रकाशित", stats.published, "Published", null],
+    ["Reporters", stats.reporters, "Active users", null],
   ] as const;
 
   const workflow = [
@@ -167,7 +167,7 @@ export default function Home() {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {cards.map(([title, value, note]) => <div key={title} className="rounded-2xl border bg-white p-5 shadow-sm"><p className="text-sm text-slate-500">{title}</p><p className="mt-2 text-3xl font-black">{loading ? "…" : value}</p><p className="mt-1 text-xs font-medium text-emerald-600">{note}</p></div>)}
+            {cards.map(([title, value, note, href]) => href ? <Link key={title} href={href} aria-label={`${title} उघडा`} className="rounded-2xl border bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-amber-400 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500"><p className="text-sm text-slate-500">{title}</p><p className="mt-2 text-3xl font-black">{loading ? "…" : value}</p><p className="mt-1 text-xs font-medium text-emerald-600">{note}</p></Link> : <div key={title} className="rounded-2xl border bg-white p-5 shadow-sm"><p className="text-sm text-slate-500">{title}</p><p className="mt-2 text-3xl font-black">{loading ? "…" : value}</p><p className="mt-1 text-xs font-medium text-emerald-600">{note}</p></div>)}
           </div>
 
           <div className="mt-6 grid gap-6 lg:grid-cols-[1.4fr_1fr]">
