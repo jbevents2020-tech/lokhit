@@ -20,7 +20,10 @@ async function getAdmin(request: Request) {
   if (!url || !publicKey || !serviceKey) return { error: NextResponse.json({ error: "Supabase Admin configuration उपलब्ध नाही." }, { status: 503 }) };
   const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
   if (!token) return { error: NextResponse.json({ error: "Authentication आवश्यक आहे." }, { status: 401 }) };
-  const viewer = createClient(url, publicKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  const viewer = createClient(url, publicKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
   const { data: { user } } = await viewer.auth.getUser(token);
   if (!user) return { error: NextResponse.json({ error: "Session invalid आहे." }, { status: 401 }) };
   const { data: profile } = await viewer.from("profiles").select("role").eq("id", user.id).single();
