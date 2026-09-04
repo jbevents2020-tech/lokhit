@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import sharp from "sharp";
 
 function escapeHtml(value: string) {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
@@ -169,11 +170,18 @@ export async function POST(request: Request) {
       const imageResponse = await fetch(imageUrl, { signal: AbortSignal.timeout(30000) });
       if (!imageResponse.ok) throw new Error("Featured Image download झाली नाही.");
       const imageBytes = await imageResponse.arrayBuffer();
-      const filename = imageUrl.pathname.split("/").pop() || `${news.slug || news.id}.jpg`;
+      const wordpressImage = await sharp(Buffer.from(imageBytes))
+        .rotate()
+        .resize({ width: 1920, height: 1920, fit: "inside", withoutEnlargement: true })
+        .flatten({ background: "#ffffff" })
+        .jpeg({ quality: 88, mozjpeg: true })
+        .toBuffer();
+      const safeImageName = (news.slug || news.id).replace(/[^a-zA-Z0-9_-]/g, "-") || news.id;
+      const filename = `${safeImageName}.jpg`;
       const media = await wordpressRequest(`${wordpressUrl}/wp-json/wp/v2/media`, authorization, {
         method: "POST",
-        headers: { "Content-Type": imageResponse.headers.get("content-type") || "image/jpeg", "Content-Disposition": `attachment; filename="${filename.replaceAll('"', "")}"` },
-        body: imageBytes,
+        headers: { "Content-Type": "image/jpeg", "Content-Disposition": `attachment; filename="${filename}"` },
+        body: wordpressImage,
       }, "WordPress Media upload");
       const mediaLocationId = media.location?.match(/\/media\/(\d+)\/?$/)?.[1];
       const mediaId = typeof media.payload?.id === "number" ? media.payload.id : Number(mediaLocationId);
