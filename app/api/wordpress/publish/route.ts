@@ -24,6 +24,10 @@ type WordPressCategory = { id: number; name: string };
 type WordPressUser = { id: number; name: string; slug?: string; email?: string };
 type WordPressTag = { id: number; name: string };
 
+function isWordPressUserPermissionError(error: unknown) {
+  return error instanceof Error && /not allowed to create new users|not allowed to edit users/i.test(error.message);
+}
+
 async function wordpressCollection<T>(url: string, authorization: string, label: string): Promise<T[]> {
   const response = await fetch(url, {
     headers: { Authorization: authorization },
@@ -118,22 +122,34 @@ export async function POST(request: Request) {
     let wordpressAuthor = wordpressUsers.find((author) => reporterEmail && author.email?.trim().toLowerCase() === reporterEmail)
       ?? wordpressUsers.find((author) => reporterEmailName && [reporterEmailName, reporterEmailSlug].includes(author.slug?.trim().toLowerCase()))
       ?? wordpressUsers.find((author) => reporterName && normalize(author.name) === normalize(reporterName));
+    let usesFallbackAuthor = false;
     if (!wordpressAuthor) {
       if (!reporterEmail || !reporterName) return NextResponse.json({ error: "WordPress Author तयार करण्यासाठी वार्ताहराचे पूर्ण नाव आणि email आवश्यक आहे." }, { status: 400 });
-      const createdAuthor = await wordpressRequest(`${wordpressUrl}/wp-json/wp/v2/users`, authorization, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: reporterEmailSlug || `wartahar-${crypto.randomUUID().slice(0, 8)}`,
-          email: reporterEmail,
-          name: reporterName,
-          password: `${crypto.randomUUID()}-${crypto.randomUUID()}`,
-          roles: ["author"],
-        }),
-      }, "WordPress Author create");
-      const createdAuthorId = Number(createdAuthor.payload?.id);
-      if (!Number.isInteger(createdAuthorId) || createdAuthorId <= 0) throw new Error(`“${reporterName}” यांचा WordPress Author तयार झाला नाही.`);
-      wordpressAuthor = { id: createdAuthorId, name: reporterName, email: reporterEmail };
+      try {
+        const createdAuthor = await wordpressRequest(`${wordpressUrl}/wp-json/wp/v2/users`, authorization, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: reporterEmailSlug || `wartahar-${crypto.randomUUID().slice(0, 8)}`,
+            email: reporterEmail,
+            name: reporterName,
+            password: `${crypto.randomUUID()}-${crypto.randomUUID()}`,
+            roles: ["author"],
+          }),
+        }, "WordPress Author create");
+        const createdAuthorId = Number(createdAuthor.payload?.id);
+        if (!Number.isInteger(createdAuthorId) || createdAuthorId <= 0) throw new Error(`“${reporterName}” यांचा WordPress Author तयार झाला नाही.`);
+        wordpressAuthor = { id: createdAuthorId, name: reporterName, email: reporterEmail };
+      } catch (error) {
+        if (!isWordPressUserPermissionError(error)) throw error;
+        const currentUser = await wordpressRequest(`${wordpressUrl}/wp-json/wp/v2/users/me?context=edit`, authorization, {
+          method: "GET",
+        }, "WordPress current user");
+        const currentUserId = Number(currentUser.payload?.id);
+        if (!Number.isInteger(currentUserId) || currentUserId <= 0) throw new Error("WordPress publishing accountची माहिती मिळाली नाही.");
+        wordpressAuthor = { id: currentUserId, name: wordpressUsername };
+        usesFallbackAuthor = true;
+      }
     }
 
     const seoKeywords = Array.isArray(news.seo_keywords)
@@ -141,6 +157,7 @@ export async function POST(request: Request) {
       : [];
     const wordpressTagIds = await Promise.all(seoKeywords.map((keyword) => resolveWordPressTag(wordpressUrl, authorization, keyword)));
     const locationPrefix = news.location?.trim() ? `<p><strong>स्थान: ${escapeHtml(news.location.trim())}</strong></p>\n` : "";
+    const reporterPrefix = usesFallbackAuthor && reporterName ? `<p><strong>वार्ताहर: ${escapeHtml(reporterName)}</strong></p>\n` : "";
 
     let featuredMedia: number | undefined;
     if (news.featured_image_url) {
@@ -170,7 +187,7 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         title: news.title, slug: news.slug || undefined,
         excerpt: news.excerpt ? textToHtml(news.excerpt) : undefined,
-        content: `${locationPrefix}${textToHtml(news.content)}`, status: "publish", featured_media: featuredMedia,
+        content: `${locationPrefix}${reporterPrefix}${textToHtml(news.content)}`, status: "publish", featured_media: featuredMedia,
         categories: [wordpressCategory.id], author: wordpressAuthor.id, tags: wordpressTagIds,
       }),
     }, "WordPress Post publish");
