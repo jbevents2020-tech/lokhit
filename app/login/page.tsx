@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, LockKeyhole, Newspaper } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { safeNewsPath } from '@/lib/push/path';
 
 export default function LoginPage() {
   const supabase = createClient();
@@ -28,7 +29,7 @@ export default function LoginPage() {
       return;
     }
 
-    window.location.href = "/";
+    window.location.href = safeNewsPath(new URLSearchParams(window.location.search).get('next'));
   }
 
   return (

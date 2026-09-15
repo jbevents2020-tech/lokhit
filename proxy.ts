@@ -1,7 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { safeNewsPath } from '@/lib/push/path';
 
 export async function proxy(request: NextRequest) {
+  // The worker authenticates its own secret; Supabase cookies are not applicable.
+  if (request.nextUrl.pathname === '/api/push/dispatch') return NextResponse.next();
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -32,12 +35,14 @@ export async function proxy(request: NextRequest) {
   if (!user && !isLoginPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
+    url.searchParams.set('next', safeNewsPath(request.nextUrl.pathname));
     return NextResponse.redirect(url);
   }
 
   if (user && isLoginPage) {
     const url = request.nextUrl.clone();
-    url.pathname = "/";
+    url.pathname = safeNewsPath(request.nextUrl.searchParams.get('next'));
+    url.search = '';
     return NextResponse.redirect(url);
   }
 
