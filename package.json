@@ -6,11 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:push": "tsx --test tests/push*.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "latest",
     "@supabase/supabase-js": "latest",
+    "firebase-admin": "14.4.0",
     "lucide-react": "latest",
     "next": "latest",
     "react": "latest",
@@ -18,11 +20,13 @@
     "sharp": "^0.35.4"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
     "@tailwindcss/postcss": "latest",
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "tailwindcss": "latest",
+    "tsx": "4.23.13",
     "typescript": "latest"
   }
 }
