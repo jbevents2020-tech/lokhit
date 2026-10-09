@@ -123,29 +123,18 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-slate-50">
       <header className="border-b bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-6 sm:py-4">
           <div>
-            <div className="text-xl font-black tracking-tight sm:text-2xl">लोकहित <span className="text-amber-600">Newsroom</span></div>
-            <div className="text-xs text-slate-500">Digital News Publishing Platform</div>
+            <div className="text-lg font-black tracking-tight sm:text-2xl">लोकहित <span className="text-amber-600">Newsroom</span></div>
+            <div className="hidden text-xs text-slate-500 sm:block">Digital News Publishing Platform</div>
           </div>
           <div className="flex items-center gap-3">
-            <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">{roleLabel}</span>
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-bold text-white">{avatarLetter}</div>
+            <span className="hidden rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 sm:inline">{roleLabel}</span>
+            <div className="hidden h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-bold text-white sm:flex">{avatarLetter}</div>
             <button onClick={handleLogout} title="Logout" className="rounded-xl border border-slate-200 p-2 text-slate-600 hover:bg-slate-50 hover:text-slate-950"><LogOut size={17}/></button>
           </div>
         </div>
       </header>
-
-      <nav aria-label="Mobile navigation" className="sticky top-0 z-20 overflow-x-auto border-b bg-white/95 px-3 py-2 backdrop-blur md:hidden">
-        <div className="flex min-w-max gap-2 text-xs font-bold">
-          <span className="rounded-lg bg-slate-900 px-3 py-2 text-white">Dashboard</span>
-          <Link href="/news" className="rounded-lg bg-amber-50 px-3 py-2 text-amber-800">नवीन बातमी</Link>
-          <Link href="/my-news" className="rounded-lg bg-slate-100 px-3 py-2 text-slate-700">माझ्या बातम्या</Link>
-          {(profile?.role === "admin" || profile?.role === "editor") && <Link href="/review" className="rounded-lg bg-slate-100 px-3 py-2 text-slate-700">Review</Link>}
-          {(profile?.role === "admin" || profile?.role === "editor") && <Link href="/all-news" className="rounded-lg bg-slate-100 px-3 py-2 text-slate-700">सर्व बातम्या</Link>}
-          {profile?.role === "admin" && <Link href="/users" className="rounded-lg bg-slate-100 px-3 py-2 text-slate-700">Users</Link>}
-        </div>
-      </nav>
 
       <div className="mx-auto grid max-w-7xl grid-cols-1 md:grid-cols-[220px_1fr]">
         <aside className="hidden border-r bg-white p-4 md:block">
@@ -166,7 +155,7 @@ export default function Home() {
             <Link href="/news" className="flex items-center justify-center gap-2 rounded-xl bg-amber-600 px-5 py-3 text-sm font-bold text-white shadow-sm"><PenLine size={17}/> नवीन बातमी तयार करा</Link>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
             {cards.map(([title, value, note, href]) => href ? <Link key={title} href={href} aria-label={`${title} उघडा`} className="rounded-2xl border bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-amber-400 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500"><p className="text-sm text-slate-500">{title}</p><p className="mt-2 text-3xl font-black">{loading ? "…" : value}</p><p className="mt-1 text-xs font-medium text-emerald-600">{note}</p></Link> : <div key={title} className="rounded-2xl border bg-white p-5 shadow-sm"><p className="text-sm text-slate-500">{title}</p><p className="mt-2 text-3xl font-black">{loading ? "…" : value}</p><p className="mt-1 text-xs font-medium text-emerald-600">{note}</p></div>)}
           </div>
 

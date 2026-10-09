@@ -90,3 +90,20 @@ export async function PATCH(request: Request) {
   }
   return NextResponse.json({ success: true, featuredImageUrl });
 }
+
+export async function DELETE(request: Request) {
+  const context = await getAdmin(request);
+  if ("error" in context) return context.error;
+  const body = await request.json().catch(() => null) as { id?: unknown } | null;
+  const id = typeof body?.id === "string" ? body.id : "";
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return NextResponse.json({ error: "Invalid news id." }, { status: 400 });
+  const { data: news } = await context.admin.from("news").select("id, wordpress_post_id").eq("id", id).single();
+  if (!news) return NextResponse.json({ error: "ही बातमी उपलब्ध नाही." }, { status: 404 });
+  if (news.wordpress_post_id) return NextResponse.json({ error: "WordPress वर प्रकाशित झालेली बातमी येथून delete करता येणार नाही." }, { status: 409 });
+  const { data: images } = await context.admin.from("news_images").select("storage_path").eq("news_id", id);
+  const paths = (images ?? []).map((image) => image.storage_path).filter(Boolean);
+  const { error } = await context.admin.from("news").delete().eq("id", id);
+  if (error) return NextResponse.json({ error: `बातमी delete झाली नाही: ${error.message}` }, { status: 400 });
+  if (paths.length) await context.admin.storage.from("news-images").remove(paths);
+  return NextResponse.json({ success: true });
+}
