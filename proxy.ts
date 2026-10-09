@@ -28,8 +28,9 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const isLoginPage = request.nextUrl.pathname === "/login";
+  const isPasswordRecoveryPage = ["/forgot-password", "/reset-password"].includes(request.nextUrl.pathname);
 
-  if (!user && !isLoginPage) {
+  if (!user && !isLoginPage && !isPasswordRecoveryPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);

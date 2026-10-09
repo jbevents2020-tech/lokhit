@@ -42,6 +42,7 @@ export default function LoginPage() {
         <form className="space-y-5" onSubmit={handleLogin}>
           <label className="block"><span className="mb-2 block text-sm font-semibold text-slate-700">Email</span><input required value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="name@example.com" className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-500" /></label>
           <label className="block"><span className="mb-2 block text-sm font-semibold text-slate-700">Password</span><div className="relative"><LockKeyhole className="absolute left-4 top-3.5 text-slate-400" size={18}/><input required value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="••••••••" className="w-full rounded-xl border border-slate-200 py-3 pl-11 pr-4 outline-none focus:border-amber-500" /></div></label>
+          <div className="text-right"><Link href="/forgot-password" className="text-sm font-semibold text-amber-700 hover:text-amber-800">Password विसरलात?</Link></div>
           {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
           <button disabled={loading} type="submit" className="w-full rounded-xl bg-amber-600 px-4 py-3.5 font-bold text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60">{loading ? "Signing in..." : "Login"}</button>
         </form>
