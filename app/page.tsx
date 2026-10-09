@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { ExternalLink, FileText, ImagePlus, LayoutDashboard, LogOut, PenLine, Send, Share2, Sparkles, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { NotificationBell } from "@/app/components/notification-bell";
 
 type Profile = {
   full_name: string | null;
@@ -108,10 +109,10 @@ export default function Home() {
   const avatarLetter = profile?.full_name?.trim()?.charAt(0)?.toUpperCase() || "U";
 
   const cards = [
-    ["एकूण बातम्या", stats.total, "Live database", null],
+    ["एकूण बातम्या", stats.total, "Live database", "/all-news"],
     ["प्रलंबित बातम्या", stats.pending, "Editor review", "/review"],
-    ["प्रकाशित", stats.published, "Published", null],
-    ["Reporters", stats.reporters, "Active users", null],
+    ["प्रकाशित", stats.published, "Published", "/all-news?status=published"],
+    ["Reporters", stats.reporters, "Active users", "/users"],
   ] as const;
 
   const workflow = [
@@ -129,6 +130,7 @@ export default function Home() {
             <div className="hidden text-xs text-slate-500 sm:block">Digital News Publishing Platform</div>
           </div>
           <div className="flex items-center gap-3">
+            <NotificationBell />
             <span className="hidden rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 sm:inline">{roleLabel}</span>
             <div className="hidden h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-bold text-white sm:flex">{avatarLetter}</div>
             <button onClick={handleLogout} title="Logout" className="rounded-xl border border-slate-200 p-2 text-slate-600 hover:bg-slate-50 hover:text-slate-950"><LogOut size={17}/></button>
