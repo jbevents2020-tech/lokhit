@@ -2,13 +2,14 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, LockKeyhole, Newspaper } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, LockKeyhole, Newspaper } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const supabase = createClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -41,7 +42,7 @@ export default function LoginPage() {
         </div>
         <form className="space-y-5" onSubmit={handleLogin}>
           <label className="block"><span className="mb-2 block text-sm font-semibold text-slate-700">Email</span><input required value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="name@example.com" className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-500" /></label>
-          <label className="block"><span className="mb-2 block text-sm font-semibold text-slate-700">Password</span><div className="relative"><LockKeyhole className="absolute left-4 top-3.5 text-slate-400" size={18}/><input required value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="••••••••" className="w-full rounded-xl border border-slate-200 py-3 pl-11 pr-4 outline-none focus:border-amber-500" /></div></label>
+          <label className="block"><span className="mb-2 block text-sm font-semibold text-slate-700">Password</span><div className="relative"><LockKeyhole className="absolute left-4 top-3.5 text-slate-400" size={18}/><input required value={password} onChange={(e) => setPassword(e.target.value)} type={showPassword ? "text" : "password"} placeholder="••••••••" className="w-full rounded-xl border border-slate-200 py-3 pl-11 pr-12 outline-none focus:border-amber-500" /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "Password लपवा" : "Password दाखवा"} className="absolute right-3 top-2.5 rounded-lg p-1.5 text-slate-500 hover:bg-slate-100">{showPassword ? <EyeOff size={19}/> : <Eye size={19}/>}</button></div></label>
           <div className="text-right"><Link href="/forgot-password" className="text-sm font-semibold text-amber-700 hover:text-amber-800">Password विसरलात?</Link></div>
           {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
           <button disabled={loading} type="submit" className="w-full rounded-xl bg-amber-600 px-4 py-3.5 font-bold text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60">{loading ? "Signing in..." : "Login"}</button>
